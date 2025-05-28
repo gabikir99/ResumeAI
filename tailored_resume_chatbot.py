@@ -34,9 +34,9 @@ class Website:
             f"Here’s the job description:\n\n{self.text}"
         )
         
-def message_for(website):
+def message_for(content, is_website=True):
     system_prompt = """
-    You are a friendly and professional career advisor chatbot.
+    You are a friendly and professional career advisor chatbot specializing in resumes and job applications.
 
     When a user provides a job description, help them by generating:
 
@@ -53,21 +53,37 @@ def message_for(website):
     - Other Tools or Techniques
 
     Use only the categories relevant to the job. List the tools in each group separated by commas. Do not use Markdown formatting — just plain text.
-"""
 
+    For general questions about resumes, job applications, interviews, or career advice, provide helpful, concise, and practical guidance.
+    """
 
-    return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": website.user_prompt()},
-    ]
+    if is_website:
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content.user_prompt()},
+        ]
+    else:
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content},
+        ]
 
 def generate_resume_sections(url):
     website = Website(url)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=message_for(website),
+        messages=message_for(website, is_website=True),
         max_tokens=1500,
         temperature=0.3
+    )
+    return "\n" + response.choices[0].message.content.strip()
+
+def chat_about_resumes(query):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=message_for(query, is_website=False),
+        max_tokens=1500,
+        temperature=0.7
     )
     return "\n" + response.choices[0].message.content.strip()
 
@@ -81,27 +97,37 @@ def is_valid_url(url):
 
 def main():
     print("\nWelcome to the Tailored Resume Chatbot!\n")
+    print("You can:")
+    print("1. Enter a job description URL to get tailored resume sections")
+    print("2. Ask any question about resumes, job applications, or career advice")
     print("Type 'exit' or 'quit' at any time to stop.\n")
     
     while True:
-        url = input("Please enter the job description URL: \n").strip()
+        user_input = input("Enter a URL or ask a question: \n").strip()
         
-        if url.lower() in ['exit', 'quit']:
+        if user_input.lower() in ['exit', 'quit']:
             print("Exiting the chatbot. Goodbye!")
             break
             
-        if is_valid_url(url):
+        if is_valid_url(user_input):
             try:
                 print("Processing job description... Please wait.\n")
-                summary = generate_resume_sections(url)
+                summary = generate_resume_sections(user_input)
                 print(summary)
-                print("\n" + "="*50 + "\n") 
-                print("You can enter another URL or type 'exit'/'quit' to stop.\n")
             except Exception as e:
                 print(f"An error occurred while processing the URL: {e}")
                 print("Please try again with a different URL.\n")
         else:
-            print("That doesn't look like a valid URL. Please include http:// or https:// and a valid domain.\n")
+            try:
+                print("Thinking about your question... Please wait.\n")
+                response = chat_about_resumes(user_input)
+                print(response)
+            except Exception as e:
+                print(f"An error occurred while processing your question: {e}")
+                print("Please try asking in a different way.\n")
+        
+        print("\n" + "="*50 + "\n")
+        print("You can enter another URL, ask another question, or type 'exit'/'quit' to stop.\n")
         
     
 if __name__ == "__main__":
