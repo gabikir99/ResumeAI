@@ -76,7 +76,6 @@ def print_streaming(text):
         sys.stdout.write(char)
         sys.stdout.flush()
         time.sleep(0.01)  # Adjust delay as needed
-    sys.stdout.write("\n")
 
 def generate_resume_sections(url):
     website = Website(url)
@@ -95,6 +94,8 @@ def generate_resume_sections(url):
             content = chunk.choices[0].delta.content
             print_streaming(content)
             full_response += content
+    print("")  # Add a newline at the end
+    print("")  # Add a newline at the end
     
     return full_response
 
