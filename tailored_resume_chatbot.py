@@ -1,5 +1,7 @@
 import os
 import requests
+import time
+import sys
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from IPython.display import Markdown, display
@@ -68,24 +70,52 @@ def message_for(content, is_website=True):
             {"role": "user", "content": content},
         ]
 
+def print_streaming(text):
+    """Print text character by character with a slight delay to simulate typing."""
+    for char in text:
+        sys.stdout.write(char)
+        sys.stdout.flush()
+        time.sleep(0.01)  # Adjust delay as needed
+    sys.stdout.write("\n")
+
 def generate_resume_sections(url):
     website = Website(url)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=message_for(website, is_website=True),
         max_tokens=1500,
-        temperature=0.3
+        temperature=0.3,
+        stream=True
     )
-    return "\n" + response.choices[0].message.content.strip()
+    
+    print("")  # Add a newline before starting
+    full_response = ""
+    for chunk in response:
+        if chunk.choices[0].delta.content:
+            content = chunk.choices[0].delta.content
+            print_streaming(content)
+            full_response += content
+    
+    return full_response
 
 def chat_about_resumes(query):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=message_for(query, is_website=False),
         max_tokens=1500,
-        temperature=0.7
+        temperature=0.7,
+        stream=True
     )
-    return "\n" + response.choices[0].message.content.strip()
+    
+    print("")  # Add a newline before starting
+    full_response = ""
+    for chunk in response:
+        if chunk.choices[0].delta.content:
+            content = chunk.choices[0].delta.content
+            print_streaming(content)
+            full_response += content
+    
+    return full_response
 
 def is_valid_url(url):
     try:
@@ -113,7 +143,7 @@ def main():
             try:
                 print("Processing job description... Please wait.\n")
                 summary = generate_resume_sections(user_input)
-                print(summary)
+                # No need to print summary as it's already printed in the streaming function
             except Exception as e:
                 print(f"An error occurred while processing the URL: {e}")
                 print("Please try again with a different URL.\n")
@@ -121,7 +151,7 @@ def main():
             try:
                 print("Thinking about your question... Please wait.\n")
                 response = chat_about_resumes(user_input)
-                print(response)
+                # No need to print response as it's already printed in the streaming function
             except Exception as e:
                 print(f"An error occurred while processing your question: {e}")
                 print("Please try asking in a different way.\n")
