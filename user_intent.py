@@ -39,6 +39,36 @@ PERSONALIZATION: If the user has previously shared personal information (name, c
 
 INTENT_FUNCTIONS = [
     {
+        "name": "handle_greeting",
+        "description": "Respond to user greetings like 'hello', 'hi', 'hey', 'good morning', etc.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "greeting": {
+                    "type": "string",
+                    "description": "The greeting message from the user"
+                }
+            },
+            "required": ["greeting"],
+            "additionalProperties": False
+        }
+    },
+    {
+        "name": "handle_goodbye",
+        "description": "Respond to user farewells like 'goodbye', 'bye', 'see you later', 'thanks', etc.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "farewell": {
+                    "type": "string",
+                    "description": "The farewell message from the user"
+                }
+            },
+            "required": ["farewell"],
+            "additionalProperties": False
+        }
+    },
+    {
         "name": "process_job_url",
         "description": "Process a job posting URL to generate tailored resume sections. Use this when the user provides a URL to a job posting.",
         "parameters": {
@@ -145,15 +175,17 @@ def classify_intent_with_gpt(user_input, client, user_memory=None):
     You are an intent classifier for a career advice chatbot. Analyze the user's input and determine the most appropriate action.
 
     Guidelines:
-    1. If it's a valid URL (http/https), use process_job_url
-    2. If it's a long text that appears to be a job description, use process_job_description
-    3. If it's a career-related question, use answer_career_question
-    4. If the user is sharing personal information (name, role, experience, skills, etc.), use store_personal_info
+    1. If it's a greeting (hello, hi, hey, good morning, etc.), use handle_greeting
+    2. If it's a farewell (goodbye, bye, see you later, thanks, etc.), use handle_goodbye
+    3. If it's a valid URL (http/https), use process_job_url
+    4. If it's a long text that appears to be a job description, use process_job_description
+    5. If it's a career-related question, use answer_career_question
+    6. If the user is sharing personal information (name, role, experience, skills, etc.), use store_personal_info
        - IMPORTANT: Prioritize detecting personal information. If the user mentions their name, experience, skills, education, or other personal details, ALWAYS classify as store_personal_info
        - Examples: "My name is...", "I have X years of experience", "I know Python", "I graduated from...", etc.
-    5. If the user is asking about their previously shared information, use answer_career_question
+    7. If the user is asking about their previously shared information, use answer_career_question
        - Examples: "What's my name?", "What experience do I have?", etc.
-    6. If it's completely off-topic (not about careers/resumes/jobs), use handle_off_topic
+    8. If it's completely off-topic (not about careers/resumes/jobs), use handle_off_topic
     
     The user input should be analyzed in context of career advice and resume assistance.{memory_context}
     """
@@ -204,6 +236,26 @@ def simple_fallback_classification(user_input):
         str: The detected intent ('url', 'job_description', 'question', 'greeting', 'farewell', or 'other').
     """
     user_input_lower = user_input.strip().lower()
+    
+    # Check for greetings
+    greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'howdy', 'greetings']
+    for greeting in greetings:
+        if greeting in user_input_lower or user_input_lower == greeting:
+            return {
+                'intent': 'handle_greeting',
+                'args': {'greeting': user_input},
+                'type': 'function_call'
+            }
+    
+    # Check for farewells
+    farewells = ['goodbye', 'bye', 'see you', 'farewell', 'thanks', 'thank you', 'cya', 'later', 'have a good day']
+    for farewell in farewells:
+        if farewell in user_input_lower or user_input_lower == farewell:
+            return {
+                'intent': 'handle_goodbye',
+                'args': {'farewell': user_input},
+                'type': 'function_call'
+            }
     
     # Check for personal information first
     personal_info_patterns = [
