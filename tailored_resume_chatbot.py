@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from IPython.display import Markdown, display
 from openai import OpenAI
 from urllib.parse import urlparse
+from user_intent import classify_intent, get_response_for_intent, get_system_prompt
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -37,27 +38,7 @@ class Website:
         )
         
 def message_for(content, is_website=True):
-    system_prompt = """
-    You are a friendly and professional career advisor chatbot specializing in resumes and job applications.
-
-    When a user provides a job description, help them by generating:
-
-    1. An Objective — a brief 1–2 sentence summary of why they are a great fit for the role.
-
-    2. A list of exactly 6-7 Highlights of Qualifications — specific, relevant points about their skills, achievements, or experience that match the job.
-
-    3. A categorized list of Technical Skills — do not list them as a single list. Instead, group them under headings such as:
-    - Programming Languages, IDEs, and Libraries
-    - Data Tools
-    - Machine Learning & AI Tools
-    - Cloud Platforms
-    - DevOps & Version Control
-    - Other Tools or Techniques
-
-    Use only the categories relevant to the job. List the tools in each group separated by commas. Do not use Markdown formatting — just plain text.
-
-    For general questions about resumes, job applications, interviews, or career advice, provide helpful, concise, and practical guidance.
-    """
+    system_prompt = get_system_prompt()
 
     if is_website:
         return [
@@ -118,47 +99,77 @@ def chat_about_resumes(query):
     
     return full_response
 
-def is_valid_url(url):
-    try:
-        parsed = urlparse(url)
-        return all([parsed.scheme in ("http", "https"), parsed.netloc])
-    except:
-        return False
-
+def process_job_description(text):
+    """Process a job description directly from text."""
+    print("Analyzing this job description... Please wait.\n")
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=message_for(text, is_website=False),
+        max_tokens=1500,
+        temperature=0.3,
+        stream=True
+    )
+    
+    print("")  # Add a newline before starting
+    full_response = ""
+    for chunk in response:
+        if chunk.choices[0].delta.content:
+            content = chunk.choices[0].delta.content
+            print_streaming(content)
+            full_response += content
+    print("")  # Add a newline at the end
+    print("")  # Add a newline at the end
+    
+    return full_response
 
 def main():
     print("\nWelcome to the Tailored Resume Chatbot!\n")
     print("You can:")
     print("1. Enter a job description URL to get tailored resume sections")
-    print("2. Ask any question about resumes, job applications, or career advice")
+    print("2. Paste a job description directly")
+    print("3. Ask any question about resumes, job applications, or career advice")
     print("Type 'exit' or 'quit' at any time to stop.\n")
     
     while True:
-        user_input = input("Enter a URL or ask a question: \n").strip()
+        user_input = input("What can I help you with today? \n").strip()
         
-        if user_input.lower() in ['exit', 'quit']:
-            print("Exiting the chatbot. Goodbye!")
+        # Classify the user's intent
+        intent = classify_intent(user_input)
+        response_info = get_response_for_intent(intent, user_input)
+        
+        # Handle the intent
+        if response_info['type'] == 'farewell' or user_input.lower() in ['exit', 'quit']:
+            print(response_info['message'])
             break
             
-        if is_valid_url(user_input):
+        elif response_info['type'] == 'greeting' or response_info['type'] == 'other':
+            print(response_info['message'])
+            
+        elif response_info['type'] == 'url':
             try:
-                print("Processing job description... Please wait.\n")
+                print(response_info['message'])
                 summary = generate_resume_sections(user_input)
-                # No need to print summary as it's already printed in the streaming function
             except Exception as e:
                 print(f"An error occurred while processing the URL: {e}")
                 print("Please try again with a different URL.\n")
-        else:
+                
+        elif response_info['type'] == 'job_description':
             try:
-                print("Thinking about your question... Please wait.\n")
+                process_job_description(user_input)
+            except Exception as e:
+                print(f"An error occurred while processing the job description: {e}")
+                print("Please try again with a different description.\n")
+                
+        elif response_info['type'] == 'question':
+            try:
+                print(response_info['message'])
                 response = chat_about_resumes(user_input)
-                # No need to print response as it's already printed in the streaming function
             except Exception as e:
                 print(f"An error occurred while processing your question: {e}")
                 print("Please try asking in a different way.\n")
         
         print("\n" + "="*50 + "\n")
-        print("You can enter another URL, ask another question, or type 'exit'/'quit' to stop.\n")
+        print("You can enter another URL, paste a job description, ask another question, or type 'exit'/'quit' to stop.\n")
         
     
 if __name__ == "__main__":
