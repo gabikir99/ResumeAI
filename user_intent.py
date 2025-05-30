@@ -1,5 +1,5 @@
 import re
-from urllib.parse import urlparse
+from utils import is_valid_url
 
 # System prompt for the resume advisor chatbot
 SYSTEM_PROMPT = """
@@ -340,23 +340,6 @@ def simple_fallback_classification(user_input):
         'type': 'function_call'
     }
 
-
-def is_valid_url(url):
-    """
-    Check if the provided string is a valid URL.
-    
-    Args:
-        url (str): The URL string to validate.
-        
-    Returns:
-        bool: True if the URL is valid, False otherwise.
-    """
-    try:
-        parsed = urlparse(url)
-        return all([parsed.scheme in ('http', 'https'), parsed.netloc])
-    except:
-        return False
-    
 def get_system_prompt():
     """
     Get the system prompt for the resume advisor chatbot.
