@@ -77,10 +77,25 @@ def generate_resume_sections(url):
     
     return full_response
 
-def chat_about_resumes(query):
+def chat_about_resumes(query, user_memory=None):
+    # Create messages with user memory context if available
+    messages = message_for(query, is_website=False)
+    
+    # Add user memory context if available
+    if user_memory and len(user_memory) > 0:
+        memory_context = "User information: "
+        memory_items = []
+        for key, value in user_memory.items():
+            memory_items.append(f"{key}: {value}")
+        
+        memory_context += ", ".join(memory_items)
+        
+        # Insert memory context as a system message before the user query
+        messages.insert(1, {"role": "system", "content": memory_context})
+    
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=message_for(query, is_website=False),
+        messages=messages,
         max_tokens=1500,
         temperature=0.7,
         stream=True
@@ -140,14 +155,16 @@ def main():
                 result = process_job_description(intent_info['args']['job_description'])
                 
             elif intent_info['intent'] == 'answer_career_question':
-                response = chat_about_resumes(intent_info['args']['question'])
+                response = chat_about_resumes(intent_info['args']['question'], user_memory)
                 
             elif intent_info['intent'] == 'store_personal_info':
                 # Store the personal information for future personalization
                 info_type = intent_info['args']['info_type']
                 info_value = intent_info['args']['info_value']
                 user_memory[info_type] = info_value
-                print_streaming(f"Personal information stored: {info_type}")
+                
+                # Instead of showing a storage message, respond naturally
+                response = chat_about_resumes(f"You mentioned your {info_type} is {info_value}. Let me remember that. How else can I help with your career or resume?")
                 
             elif intent_info['intent'] == 'handle_off_topic':
                 print_streaming("I'm specialized in helping with resumes, job applications, and career advice.")
@@ -161,7 +178,7 @@ def main():
                 
         except Exception as e:
             error_msg = f"An error occurred: {e}"
-            return error_msg
+            print_streaming(error_msg)
         
     
 if __name__ == "__main__":
