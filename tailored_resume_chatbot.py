@@ -123,12 +123,19 @@ def process_job_description(text):
     return full_response
 
 def main():
-    print("\nWelcome to the Tailored Resume Chatbot!\n")
-    print("You can:")
-    print("1. Enter a job description URL to get tailored resume sections")
-    print("2. Paste a job description directly")
-    print("3. Ask any question about resumes, job applications, or career advice")
-    print("Type 'exit' or 'quit' at any time to stop.\n")
+    print("\n")
+    print_streaming("Welcome to the Tailored Resume Chatbot!")
+    print("\n\n")
+    print_streaming("You can:")
+    print("\n")
+    print_streaming("1. Enter a job description URL to get tailored resume sections")
+    print("\n")
+    print_streaming("2. Paste a job description directly")
+    print("\n")
+    print_streaming("3. Ask any question about resumes, job applications, or career advice")
+    print("\n")
+    print_streaming("Type 'exit' or 'quit' at any time to stop.")
+    print("\n")
     
     while True:
         user_input = input("What can I help you with today? \n").strip()
@@ -139,37 +146,51 @@ def main():
         
         # Handle the intent
         if response_info['type'] == 'farewell' or user_input.lower() in ['exit', 'quit']:
-            print(response_info['message'])
+            print_streaming(response_info['message'])
+            print("\n")
             break
             
         elif response_info['type'] == 'greeting' or response_info['type'] == 'other':
-            print(response_info['message'])
+            print_streaming(response_info['message'])
+            print("\n")
             
         elif response_info['type'] == 'url':
             try:
-                print(response_info['message'])
+                print_streaming(response_info['message'])
+                print("\n")
                 summary = generate_resume_sections(user_input)
             except Exception as e:
-                print(f"An error occurred while processing the URL: {e}")
-                print("Please try again with a different URL.\n")
+                error_msg = f"An error occurred while processing the URL: {e}"
+                print_streaming(error_msg)
+                print("\n")
+                print_streaming("Please try again with a different URL.")
+                print("\n")
                 
         elif response_info['type'] == 'job_description':
             try:
                 process_job_description(user_input)
             except Exception as e:
-                print(f"An error occurred while processing the job description: {e}")
-                print("Please try again with a different description.\n")
+                error_msg = f"An error occurred while processing the job description: {e}"
+                print_streaming(error_msg)
+                print("\n")
+                print_streaming("Please try again with a different description.")
+                print("\n")
                 
         elif response_info['type'] == 'question':
             try:
-                print(response_info['message'])
+                print_streaming(response_info['message'])
+                print("\n")
                 response = chat_about_resumes(user_input)
             except Exception as e:
-                print(f"An error occurred while processing your question: {e}")
-                print("Please try asking in a different way.\n")
+                error_msg = f"An error occurred while processing your question: {e}"
+                print_streaming(error_msg)
+                print("\n")
+                print_streaming("Please try asking in a different way.")
+                print("\n")
         
         print("\n" + "="*50 + "\n")
-        print("You can enter another URL, paste a job description, ask another question, or type 'exit'/'quit' to stop.\n")
+        print_streaming("You can enter another URL, paste a job description, ask another question, or type 'exit'/'quit' to stop.")
+        print("\n")
         
     
 if __name__ == "__main__":
