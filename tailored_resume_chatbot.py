@@ -68,15 +68,12 @@ def generate_resume_sections(url):
         stream=True
     )
     
-    print("")  # Add a newline before starting
     full_response = ""
     for chunk in response:
         if chunk.choices[0].delta.content:
             content = chunk.choices[0].delta.content
             print_streaming(content)
             full_response += content
-    print("")  # Add a newline at the end
-    print("")  # Add a newline at the end
     
     return full_response
 
@@ -89,7 +86,6 @@ def chat_about_resumes(query):
         stream=True
     )
     
-    print("")  # Add a newline before starting
     full_response = ""
     for chunk in response:
         if chunk.choices[0].delta.content:
@@ -101,7 +97,6 @@ def chat_about_resumes(query):
 
 def process_job_description(text):
     """Process a job description directly from text."""
-    print("Analyzing this job description... Please wait.\n")
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=message_for(text, is_website=False),
@@ -110,33 +105,16 @@ def process_job_description(text):
         stream=True
     )
     
-    print("")  # Add a newline before starting
     full_response = ""
     for chunk in response:
         if chunk.choices[0].delta.content:
             content = chunk.choices[0].delta.content
             print_streaming(content)
             full_response += content
-    print("")  # Add a newline at the end
-    print("")  # Add a newline at the end
     
     return full_response
 
 def main():
-    print("\n")
-    print_streaming("Welcome to the Tailored Resume Chatbot!")
-    print("\n\n")
-    print_streaming("You can:")
-    print("\n")
-    print_streaming("1. Enter a job description URL to get tailored resume sections")
-    print("\n")
-    print_streaming("2. Paste a job description directly")
-    print("\n")
-    print_streaming("3. Ask any question about resumes, job applications, or career advice")
-    print("\n")
-    print_streaming("Type 'exit' or 'quit' at any time to stop.")
-    print("\n")
-    
     # Initialize user memory for personalization
     user_memory = {}
     
@@ -144,8 +122,6 @@ def main():
         user_input = input("What can I help you with today? \n").strip()
         
         if user_input.lower() in ['exit', 'quit']:
-            print_streaming("Thank you for using the Tailored Resume Chatbot. Good luck with your job search!")
-            print("\n")
             break
         
         try:
@@ -158,46 +134,37 @@ def main():
             
             # Handle the intent based on the classification
             if intent_info['intent'] == 'process_job_url':
-                print_streaming("Analyzing this job posting URL... Please wait.\n")
                 summary = generate_resume_sections(intent_info['args']['url'])
+                return summary
                 
             elif intent_info['intent'] == 'process_job_description':
-                print_streaming("Analyzing this job description... Please wait.\n")
-                process_job_description(intent_info['args']['job_description'])
+                result = process_job_description(intent_info['args']['job_description'])
+                return result
                 
             elif intent_info['intent'] == 'answer_career_question':
-                print_streaming("Let me help you with that career question...\n")
                 response = chat_about_resumes(intent_info['args']['question'])
+                return response
                 
             elif intent_info['intent'] == 'store_personal_info':
                 # Store the personal information for future personalization
                 info_type = intent_info['args']['info_type']
                 info_value = intent_info['args']['info_value']
                 user_memory[info_type] = info_value
-                
-                print_streaming(f"Thanks for sharing your {info_type}. I'll remember that to provide more personalized advice.\n")
+                return f"Personal information stored: {info_type}"
                 
             elif intent_info['intent'] == 'handle_off_topic':
-                print_streaming("I'm specialized in helping with resumes, job applications, and career advice. Could you please ask me something related to those topics?\n")
+                return "I'm specialized in helping with resumes, job applications, and career advice."
                 
             else:
                 # Handle general responses or fallbacks
                 if 'message' in intent_info:
-                    print_streaming(intent_info['message'])
+                    return intent_info['message']
                 else:
-                    print_streaming("I'm not sure I understood that. Could you please rephrase or ask me about resumes, job applications, or career advice?")
-                print("\n")
+                    return "I'm not sure I understood that. Could you please rephrase?"
                 
         except Exception as e:
             error_msg = f"An error occurred: {e}"
-            print_streaming(error_msg)
-            print("\n")
-            print_streaming("Please try again with a different query.")
-            print("\n")
-        
-        print("\n" + "="*50 + "\n")
-        print_streaming("You can enter another URL, paste a job description, ask another question, or type 'exit'/'quit' to stop.")
-        print("\n")
+            return error_msg
         
     
 if __name__ == "__main__":
