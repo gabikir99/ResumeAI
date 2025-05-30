@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from IPython.display import Markdown, display
 from openai import OpenAI
 from urllib.parse import urlparse
-from user_intent import classify_intent, get_response_for_intent, get_system_prompt
+from user_intent import classify_intent_with_gpt, simple_fallback_classification, get_system_prompt, get_intent_functions, is_valid_url
 
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
@@ -137,56 +137,63 @@ def main():
     print_streaming("Type 'exit' or 'quit' at any time to stop.")
     print("\n")
     
+    # Initialize user memory for personalization
+    user_memory = {}
+    
     while True:
         user_input = input("What can I help you with today? \n").strip()
         
-        # Classify the user's intent
-        intent = classify_intent(user_input)
-        response_info = get_response_for_intent(intent, user_input)
-        
-        # Handle the intent
-        if response_info['type'] == 'farewell' or user_input.lower() in ['exit', 'quit']:
-            print_streaming(response_info['message'])
+        if user_input.lower() in ['exit', 'quit']:
+            print_streaming("Thank you for using the Tailored Resume Chatbot. Good luck with your job search!")
             print("\n")
             break
+        
+        try:
+            # Classify the user's intent using GPT
+            intent_info = classify_intent_with_gpt(user_input, client, user_memory)
             
-        elif response_info['type'] == 'greeting' or response_info['type'] == 'other':
-            print_streaming(response_info['message'])
+            # If GPT classification fails, fall back to simple classification
+            if not intent_info:
+                intent_info = simple_fallback_classification(user_input)
+            
+            # Handle the intent based on the classification
+            if intent_info['intent'] == 'process_job_url':
+                print_streaming("Analyzing this job posting URL... Please wait.\n")
+                summary = generate_resume_sections(intent_info['args']['url'])
+                
+            elif intent_info['intent'] == 'process_job_description':
+                print_streaming("Analyzing this job description... Please wait.\n")
+                process_job_description(intent_info['args']['job_description'])
+                
+            elif intent_info['intent'] == 'answer_career_question':
+                print_streaming("Let me help you with that career question...\n")
+                response = chat_about_resumes(intent_info['args']['question'])
+                
+            elif intent_info['intent'] == 'store_personal_info':
+                # Store the personal information for future personalization
+                info_type = intent_info['args']['info_type']
+                info_value = intent_info['args']['info_value']
+                user_memory[info_type] = info_value
+                
+                print_streaming(f"Thanks for sharing your {info_type}. I'll remember that to provide more personalized advice.\n")
+                
+            elif intent_info['intent'] == 'handle_off_topic':
+                print_streaming("I'm specialized in helping with resumes, job applications, and career advice. Could you please ask me something related to those topics?\n")
+                
+            else:
+                # Handle general responses or fallbacks
+                if 'message' in intent_info:
+                    print_streaming(intent_info['message'])
+                else:
+                    print_streaming("I'm not sure I understood that. Could you please rephrase or ask me about resumes, job applications, or career advice?")
+                print("\n")
+                
+        except Exception as e:
+            error_msg = f"An error occurred: {e}"
+            print_streaming(error_msg)
             print("\n")
-            
-        elif response_info['type'] == 'url':
-            try:
-                print_streaming(response_info['message'])
-                print("\n")
-                summary = generate_resume_sections(user_input)
-            except Exception as e:
-                error_msg = f"An error occurred while processing the URL: {e}"
-                print_streaming(error_msg)
-                print("\n")
-                print_streaming("Please try again with a different URL.")
-                print("\n")
-                
-        elif response_info['type'] == 'job_description':
-            try:
-                process_job_description(user_input)
-            except Exception as e:
-                error_msg = f"An error occurred while processing the job description: {e}"
-                print_streaming(error_msg)
-                print("\n")
-                print_streaming("Please try again with a different description.")
-                print("\n")
-                
-        elif response_info['type'] == 'question':
-            try:
-                print_streaming(response_info['message'])
-                print("\n")
-                response = chat_about_resumes(user_input)
-            except Exception as e:
-                error_msg = f"An error occurred while processing your question: {e}"
-                print_streaming(error_msg)
-                print("\n")
-                print_streaming("Please try asking in a different way.")
-                print("\n")
+            print_streaming("Please try again with a different query.")
+            print("\n")
         
         print("\n" + "="*50 + "\n")
         print_streaming("You can enter another URL, paste a job description, ask another question, or type 'exit'/'quit' to stop.")
