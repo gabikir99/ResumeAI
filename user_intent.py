@@ -22,176 +22,135 @@ When a user provides a job description, help them by generating:
 
 2. A list of exactly 6-7 Highlights of Qualifications — specific, relevant points about their skills, achievements, or experience that match the job.
 
-3. A categorized list of Relevant Skills — organize skills into logical groups based on the job requirements. Create categories that make sense for the specific role, such as:
-- For technical roles: Technical Skills, Programming Languages, Software/Tools
-- For marketing roles: Marketing Platforms, Analytics Tools, Creative Software
-- For healthcare roles: Clinical Skills, Medical Software, Certifications
-- For finance roles: Financial Software, Analysis Tools, Compliance Knowledge
-- For education roles: Teaching Methods, Educational Technology, Curriculum Development
-- And so on...
+3. A categorized list of Relevant Skills — organize skills into logical groups based on the job requirements.
 
-Choose 3-5 relevant categories based on what the job posting emphasizes. List the skills in each group separated by commas.
+IMPORTANT: Do not use any Markdown formatting in your responses. Present all text as plain text only.
 
-IMPORTANT: Do not use any Markdown formatting in your responses. Do not use asterisks (*) around section titles or for emphasis. Do not use backticks (`) for code. Do not use any special formatting characters. Present all text as plain text only.
-
-PERSONALIZATION: If the user has previously shared personal information (name, current role, experience, skills, etc.), incorporate this information naturally into your responses to make them more personalized and relevant.
+PERSONALIZATION: If the user has previously shared personal information, incorporate this information naturally into your responses.
 """
 
 INTENT_FUNCTIONS = [
     {
         "name": "handle_greeting",
-        "description": "Respond to user greetings like 'hello', 'hi', 'hey', 'good morning', etc.",
+        "description": "Respond to user greetings",
         "parameters": {
             "type": "object",
             "properties": {
-                "greeting": {
-                    "type": "string",
-                    "description": "The greeting message from the user"
-                }
+                "greeting": {"type": "string", "description": "The greeting message"}
             },
-            "required": ["greeting"],
-            "additionalProperties": False
+            "required": ["greeting"]
         }
     },
     {
         "name": "handle_goodbye",
-        "description": "Respond to user farewells like 'goodbye', 'bye', 'see you later', 'thanks', etc.",
+        "description": "Respond to user farewells",
         "parameters": {
             "type": "object",
             "properties": {
-                "farewell": {
-                    "type": "string",
-                    "description": "The farewell message from the user"
-                }
+                "farewell": {"type": "string", "description": "The farewell message"}
             },
-            "required": ["farewell"],
-            "additionalProperties": False
+            "required": ["farewell"]
         }
     },
     {
         "name": "process_job_url",
-        "description": "Process a job posting URL to generate tailored resume sections. Use this when the user provides a URL to a job posting.",
+        "description": "Process a job posting URL",
         "parameters": {
             "type": "object",
             "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The job posting URL to analyze"
-                }
+                "url": {"type": "string", "description": "The job posting URL"}
             },
-            "required": ["url"],
-            "additionalProperties": False
+            "required": ["url"]
         }
     },
     {
         "name": "process_job_description",
-        "description": "Process a job description text to generate tailored resume sections. Use this when the user pastes a job description or job posting text.",
+        "description": "Process job description text",
         "parameters": {
             "type": "object",
             "properties": {
-                "job_description": {
-                    "type": "string",
-                    "description": "The job description text to analyze"
-                }
+                "job_description": {"type": "string", "description": "The job description text"}
             },
-            "required": ["job_description"],
-            "additionalProperties": False
+            "required": ["job_description"]
         }
     },
     {
         "name": "answer_career_question",
-        "description": "Answer questions about resumes, job applications, interviews, or career advice. Use this for any career-related questions.",
+        "description": "Answer career-related questions",
         "parameters": {
             "type": "object",
             "properties": {
-                "question": {
-                    "type": "string",
-                    "description": "The career-related question to answer"
-                }
+                "question": {"type": "string", "description": "The career question"}
             },
-            "required": ["question"],
-            "additionalProperties": False
+            "required": ["question"]
         }
     },
     {
         "name": "store_personal_info",
-        "description": "Store personal information shared by the user for future personalization. Use this when the user shares their name, current role, experience, skills, or other personal details.",
+        "description": "Store personal information",
         "parameters": {
             "type": "object",
             "properties": {
                 "info_type": {
                     "type": "string",
-                    "enum": ["name", "current_role", "experience", "skills", "education", "other"],
-                    "description": "The type of personal information being shared"
+                    "enum": ["name", "current_role", "experience", "skills", "education", "other"]
                 },
-                "info_value": {
-                    "type": "string",
-                    "description": "The actual information being shared"
-                }
+                "info_value": {"type": "string", "description": "The information value"}
             },
-            "required": ["info_type", "info_value"],
-            "additionalProperties": False
+            "required": ["info_type", "info_value"]
         }
     },
     {
         "name": "handle_off_topic",
-        "description": "Handle questions that are not related to careers, resumes, or job applications. Use this for questions about cooking, exercise, entertainment, etc.",
+        "description": "Handle off-topic questions",
         "parameters": {
             "type": "object",
             "properties": {
-                "off_topic_query": {
-                    "type": "string",
-                    "description": "The off-topic question or statement"
-                }
+                "off_topic_query": {"type": "string", "description": "The off-topic query"}
             },
-            "required": ["off_topic_query"],
-            "additionalProperties": False
+            "required": ["off_topic_query"]
         }
     }
 ]
 
-def classify_intent_with_gpt(user_input, client, user_memory=None):
-    """
-    Classify the user's intent based on their input using a GPT model.
+class IntentClassifier:
+    """Classify user intents using GPT with fallback to simple rules."""
     
-    Args:
-        user_input (str): The input text from the user.
-        client: The GPT client to use for classification.
-        user_memory (dict, optional): Memory of previous interactions with the user.
+    def __init__(self, client):
+        """Initialize the intent classifier."""
+        self.client = client
+    
+    def classify_intent(self, user_input, user_memory=None):
+        """Classify the user's intent."""
+        try:
+            return self._classify_with_gpt(user_input, user_memory)
+        except Exception as e:
+            print(f"GPT classification failed: {e}. Using fallback.")
+            return self._simple_fallback_classification(user_input)
+    
+    def _classify_with_gpt(self, user_input, user_memory=None):
+        """Classify intent using GPT."""
+        memory_context = ""
+        if user_memory:
+            memory_info = [f"{k}: {v}" for k, v in user_memory.items() if v]
+            if memory_info:
+                memory_context = f"\n\nUser's stored information: {', '.join(memory_info)}"
         
-    Returns:
-        str: The detected intent ('url', 'job_description', 'question', 'greeting', 'farewell', or 'other').
-    """
-    memory_context = ""
-    if user_memory:
-        memory_info = []
-        for key, value in user_memory.items():
-            if value:
-                memory_info.append(f"{key}: {value}")
-        if memory_info:
-            memory_context = f"\n\nUser's stored information: {', '.join(memory_info)}"
-    
-    system_message = f"""
-    You are an intent classifier for a career advice chatbot. Analyze the user's input and determine the most appropriate action.
-
-    Guidelines:
-    1. If it's a greeting (hello, hi, hey, good morning, etc.), use handle_greeting
-    2. If it's a farewell (goodbye, bye, see you later, thanks, etc.), use handle_goodbye
-    3. If it's a valid URL (http/https), use process_job_url
-    4. If it's a long text that appears to be a job description, use process_job_description
-    5. If it's a career-related question, use answer_career_question
-    6. If the user is sharing personal information (name, role, experience, skills, etc.), use store_personal_info
-       - IMPORTANT: Prioritize detecting personal information. If the user mentions their name, experience, skills, education, or other personal details, ALWAYS classify as store_personal_info
-       - Examples: "My name is...", "I have X years of experience", "I know Python", "I graduated from...", etc.
-    7. If the user is asking about their previously shared information, use answer_career_question
-       - Examples: "What's my name?", "What experience do I have?", etc.
-    8. If it's completely off-topic (not about careers/resumes/jobs), use handle_off_topic
-    
-    The user input should be analyzed in context of career advice and resume assistance.{memory_context}
-    """
-
-    try:
-        response = client.chat.completions.create(
+        system_message = f"""
+        You are an intent classifier for a career advice chatbot. Analyze the user's input and determine the most appropriate action.
+        
+        Guidelines:
+        1. If it's a greeting, use handle_greeting
+        2. If it's a farewell, use handle_goodbye
+        3. If it's a valid URL, use process_job_url
+        4. If it's a long job description text, use process_job_description
+        5. If it's a career-related question, use answer_career_question
+        6. If sharing personal info (name, experience, skills, etc.), use store_personal_info
+        7. If asking about stored info, use answer_career_question
+        8. If completely off-topic, use handle_off_topic{memory_context}
+        """
+        
+        response = self.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_message},
@@ -202,7 +161,6 @@ def classify_intent_with_gpt(user_input, client, user_memory=None):
             temperature=0.1
         )
         
-        # Check if a function was called
         if response.choices[0].message.function_call:
             function_name = response.choices[0].message.function_call.name
             function_args = eval(response.choices[0].message.function_call.arguments)
@@ -213,147 +171,59 @@ def classify_intent_with_gpt(user_input, client, user_memory=None):
                 'type': 'function_call'
             }
         else:
-            # Fallback to text response
             return {
                 'intent': 'general_response',
                 'message': response.choices[0].message.content,
                 'type': 'text_response'
             }
-            
-    except Exception as e:
-        print(f"Error in intent classification: {e}")
-        # Fallback to simple classification
-        return simple_fallback_classification(user_input)
-
-def simple_fallback_classification(user_input):
-    """
-    A simple fallback classification for user input when GPT classification fails.
     
-    Args:
-        user_input (str): The input text from the user.
+    def _simple_fallback_classification(self, user_input):
+        """Simple rule-based fallback classification."""
+        user_input_lower = user_input.strip().lower()
         
-    Returns:
-        str: The detected intent ('url', 'job_description', 'question', 'greeting', 'farewell', or 'other').
-    """
-    user_input_lower = user_input.strip().lower()
-    
-    # Check for greetings
-    greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'howdy', 'greetings']
-    for greeting in greetings:
-        if greeting in user_input_lower or user_input_lower == greeting:
-            return {
-                'intent': 'handle_greeting',
-                'args': {'greeting': user_input},
-                'type': 'function_call'
-            }
-    
-    # Check for farewells
-    farewells = ['goodbye', 'bye', 'see you', 'farewell', 'thanks', 'thank you', 'cya', 'later', 'have a good day']
-    for farewell in farewells:
-        if farewell in user_input_lower or user_input_lower == farewell:
-            return {
-                'intent': 'handle_goodbye',
-                'args': {'farewell': user_input},
-                'type': 'function_call'
-            }
-    
-    # Check for personal information first
-    personal_info_patterns = [
-        (r'my name is (\w+)', 'name'),
-        (r'i am (\w+)', 'name'),
-        (r'i have (\d+) years? of experience', 'experience'),
-        (r'i work(ed)? as a(n)? (.+)', 'current_role'),
-        (r'i know (.+)', 'skills'),
-        (r'i graduated from (.+)', 'education'),
-        (r'i studied (.+)', 'education'),
-        (r'my skills include (.+)', 'skills'),
-        (r'i\'m skilled in (.+)', 'skills'),
-        (r'i\'m experienced in (.+)', 'skills')
-    ]
-    
-    for pattern, info_type in personal_info_patterns:
-        match = re.search(pattern, user_input_lower)
-        if match:
-            info_value = match.group(1) if len(match.groups()) >= 1 else user_input
-            return {
-                'intent': 'store_personal_info',
-                'args': {'info_type': info_type, 'info_value': info_value},
-                'type': 'function_call'
-            }
-    
-    # Check for memory recall questions
-    memory_questions = [
-        'what is my name', 'what\'s my name', 'who am i',
-        'what experience do i have', 'how much experience do i have',
-        'what are my skills', 'what skills do i have',
-        'what is my education', 'where did i study',
-        'what is my current role', 'what do i do'
-    ]
-    
-    for question in memory_questions:
-        if question in user_input_lower:
-            return {
-                'intent': 'answer_career_question',
-                'args': {'question': user_input},
-                'type': 'function_call'
-            }
-    
-    if is_valid_url(user_input):
-        return {
-            'intent': 'process_job_url',
-            'args': {'url': user_input},
-            'type': 'function_call'
-        }
-    
-    # Check for job description indicators
-    job_desc_indicators = [
-        'job description', 'position', 'responsibilities', 'requirements',
-        'qualifications', 'skills required', 'we are looking for'
-    ]
-    
-    indicator_count = sum(1 for indicator in job_desc_indicators if indicator in user_input_lower)
-    if indicator_count >= 2 or len(user_input.split()) > 100:
-        return {
-            'intent': 'process_job_description',
-            'args': {'job_description': user_input},
-            'type': 'function_call'
-        }
-    
-    # Check for off-topic queries
-    off_topic_indicators = [
-        'how to do pushups', 'exercise', 'cooking', 'recipe', 'weather',
-        'sports', 'movies', 'music', 'travel', 'health', 'fitness'
-    ]
-    
-    for indicator in off_topic_indicators:
-        if indicator in user_input_lower:
-            return {
-                'intent': 'handle_off_topic',
-                'args': {'off_topic_query': user_input},
-                'type': 'function_call'
-            }
-    
-    # Default to career question
-    return {
-        'intent': 'answer_career_question',
-        'args': {'question': user_input},
-        'type': 'function_call'
-    }
+        # Check for greetings
+        greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']
+        if any(greeting in user_input_lower for greeting in greetings):
+            return {'intent': 'handle_greeting', 'args': {'greeting': user_input}}
+        
+        # Check for farewells
+        farewells = ['goodbye', 'bye', 'see you', 'thanks', 'thank you']
+        if any(farewell in user_input_lower for farewell in farewells):
+            return {'intent': 'handle_goodbye', 'args': {'farewell': user_input}}
+        
+        # Check for URLs
+        if is_valid_url(user_input):
+            return {'intent': 'process_job_url', 'args': {'url': user_input}}
+        
+        # Check for personal information
+        personal_patterns = [
+            (r'my name is (\w+)', 'name'),
+            (r'i am (\w+)', 'name'),
+            (r'i have (\d+) years? of experience', 'experience'),
+            (r'i work as a(n)? (.+)', 'current_role'),
+        ]
+        
+        for pattern, info_type in personal_patterns:
+            match = re.search(pattern, user_input_lower)
+            if match:
+                info_value = match.group(1) if len(match.groups()) >= 1 else user_input
+                return {
+                    'intent': 'store_personal_info',
+                    'args': {'info_type': info_type, 'info_value': info_value}
+                }
+        
+        # Check for job description (long text with job-related keywords)
+        job_indicators = ['job description', 'responsibilities', 'requirements', 'qualifications']
+        if len(user_input.split()) > 50 and any(indicator in user_input_lower for indicator in job_indicators):
+            return {'intent': 'process_job_description', 'args': {'job_description': user_input}}
+        
+        # Default to career question
+        return {'intent': 'answer_career_question', 'args': {'question': user_input}}
 
 def get_system_prompt():
-    """
-    Get the system prompt for the resume advisor chatbot.
-    
-    Returns:
-        str: The system prompt text.
-    """
+    """Get the system prompt."""
     return SYSTEM_PROMPT
 
 def get_intent_functions():
-    """
-    Get the intent functions for the resume advisor chatbot.
-    
-    Returns:
-        list: The list of intent functions.
-    """
+    """Get the intent functions."""
     return INTENT_FUNCTIONS

@@ -1,88 +1,85 @@
-from utils import print_streaming, Website
+from utils import Website
+from user_intent import get_system_prompt
 
-def message_for(content, system_prompt, is_website=True):
-    """Create message format for GPT API."""
-    if is_website:
-        return [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": content.user_prompt()},
-        ]
-    else:
-        return [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": content},
-        ]
-
-def generate_resume_sections(url, client, system_prompt):
-    """Generate resume sections from a job posting URL."""
-    website = Website(url)
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=message_for(website, system_prompt, is_website=True),
-        max_tokens=1500,
-        temperature=0.3,
-        stream=True
-    )
+class GPTService:
+    """Service class to handle all GPT-related operations."""
     
-    full_response = ""
-    for chunk in response:
-        if chunk.choices[0].delta.content:
-            content = chunk.choices[0].delta.content
-            print_streaming(content)
-            full_response += content
+    def __init__(self, client):
+        """Initialize the GPT service with OpenAI client."""
+        self.client = client
+        self.system_prompt = get_system_prompt()
     
-    return full_response
-
-def chat_about_resumes(query, client, system_prompt, user_memory=None):
-    """Chat about resume and career-related topics."""
-    # Create messages with user memory context if available
-    messages = message_for(query, system_prompt, is_website=False)
+    def _create_messages(self, content, is_website=True, user_memory=None):
+        """Create message format for GPT API."""
+        if is_website:
+            messages = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": content.user_prompt()},
+            ]
+        else:
+            messages = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": content},
+            ]
+        
+        # Add user memory context if available
+        if user_memory and len(user_memory) > 0:
+            memory_context = self._build_memory_context(user_memory)
+            messages.insert(1, {"role": "system", "content": memory_context})
+        
+        return messages
     
-    # Add user memory context if available
-    if user_memory and len(user_memory) > 0:
-        memory_context = "User information: "
+    def _build_memory_context(self, user_memory):
+        """Build memory context string from user memory."""
         memory_items = []
         for key, value in user_memory.items():
-            memory_items.append(f"{key}: {value}")
+            if value:
+                memory_items.append(f"{key}: {value}")
         
-        memory_context += ", ".join(memory_items)
-        memory_context += "\n\nIf the user asks about their personal information (like 'what is my name?', 'what experience do I have?', etc.), respond with the stored information in a natural way."
+        memory_context = "User information: " + ", ".join(memory_items)
+        memory_context += "\n\nIf the user asks about their personal information, respond with the stored information naturally."
         
-        # Insert memory context as a system message before the user query
-        messages.insert(1, {"role": "system", "content": memory_context})
+        return memory_context
     
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=messages,
-        max_tokens=1500,
-        temperature=0.7,
-        stream=True
-    )
+    def _stream_response(self, messages, temperature=0.3):
+        """Generate streaming response from GPT."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=1500,
+            temperature=temperature,
+            stream=True
+        )
+        
+        full_response = ""
+        for chunk in response:
+            if chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                full_response += content
+        
+        return full_response
     
-    full_response = ""
-    for chunk in response:
-        if chunk.choices[0].delta.content:
-            content = chunk.choices[0].delta.content
-            print_streaming(content)
-            full_response += content
+    def generate_resume_sections(self, url):
+        """Generate resume sections from a job posting URL."""
+        try:
+            website = Website(url)
+            messages = self._create_messages(website, is_website=True)
+            return self._stream_response(messages, temperature=0.3)
+        except Exception as e:
+            return f"Error processing URL: {e}"
     
-    return full_response
-
-def process_job_description(text, client, system_prompt):
-    """Process a job description directly from text."""
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=message_for(text, system_prompt, is_website=False),
-        max_tokens=1500,
-        temperature=0.3,
-        stream=True
-    )
+    def process_job_description(self, text):
+        """Process a job description directly from text."""
+        try:
+            messages = self._create_messages(text, is_website=False)
+            return self._stream_response(messages, temperature=0.3)
+        except Exception as e:
+            return f"Error processing job description: {e}"
     
-    full_response = ""
-    for chunk in response:
-        if chunk.choices[0].delta.content:
-            content = chunk.choices[0].delta.content
-            print_streaming(content)
-            full_response += content
-    
-    return full_response
+    def chat_about_resumes(self, query, user_memory=None):
+        """Chat about resume and career-related topics."""
+        try:
+            messages = self._create_messages(query, is_website=False, user_memory=user_memory)
+            return self._stream_response(messages, temperature=0.7)
+        except Exception as e:
+            return f"Error in chat response: {e}"

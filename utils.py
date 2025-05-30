@@ -9,18 +9,10 @@ def print_streaming(text):
     for char in text:
         sys.stdout.write(char)
         sys.stdout.flush()
-        time.sleep(0.01)  # Adjust delay as needed
+        time.sleep(0.01)
 
 def is_valid_url(url):
-    """
-    Check if the provided string is a valid URL.
-    
-    Args:
-        url (str): The URL string to validate.
-        
-    Returns:
-        bool: True if the URL is valid, False otherwise.
-    """
+    """Check if the provided string is a valid URL."""
     try:
         parsed = urlparse(url)
         return all([parsed.scheme in ('http', 'https'), parsed.netloc])
