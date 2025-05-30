@@ -148,8 +148,12 @@ def classify_intent_with_gpt(user_input, client, user_memory=None):
     1. If it's a valid URL (http/https), use process_job_url
     2. If it's a long text that appears to be a job description, use process_job_description
     3. If it's a career-related question, use answer_career_question
-    4. If the user is sharing personal information (name, role, experience, skills), use store_personal_info
-    5. If it's completely off-topic (not about careers/resumes/jobs), use handle_off_topic
+    4. If the user is sharing personal information (name, role, experience, skills, etc.), use store_personal_info
+       - IMPORTANT: Prioritize detecting personal information. If the user mentions their name, experience, skills, education, or other personal details, ALWAYS classify as store_personal_info
+       - Examples: "My name is...", "I have X years of experience", "I know Python", "I graduated from...", etc.
+    5. If the user is asking about their previously shared information, use answer_career_question
+       - Examples: "What's my name?", "What experience do I have?", etc.
+    6. If it's completely off-topic (not about careers/resumes/jobs), use handle_off_topic
     
     The user input should be analyzed in context of career advice and resume assistance.{memory_context}
     """
@@ -200,6 +204,47 @@ def simple_fallback_classification(user_input):
         str: The detected intent ('url', 'job_description', 'question', 'greeting', 'farewell', or 'other').
     """
     user_input_lower = user_input.strip().lower()
+    
+    # Check for personal information first
+    personal_info_patterns = [
+        (r'my name is (\w+)', 'name'),
+        (r'i am (\w+)', 'name'),
+        (r'i have (\d+) years? of experience', 'experience'),
+        (r'i work(ed)? as a(n)? (.+)', 'current_role'),
+        (r'i know (.+)', 'skills'),
+        (r'i graduated from (.+)', 'education'),
+        (r'i studied (.+)', 'education'),
+        (r'my skills include (.+)', 'skills'),
+        (r'i\'m skilled in (.+)', 'skills'),
+        (r'i\'m experienced in (.+)', 'skills')
+    ]
+    
+    for pattern, info_type in personal_info_patterns:
+        match = re.search(pattern, user_input_lower)
+        if match:
+            info_value = match.group(1) if len(match.groups()) >= 1 else user_input
+            return {
+                'intent': 'store_personal_info',
+                'args': {'info_type': info_type, 'info_value': info_value},
+                'type': 'function_call'
+            }
+    
+    # Check for memory recall questions
+    memory_questions = [
+        'what is my name', 'what\'s my name', 'who am i',
+        'what experience do i have', 'how much experience do i have',
+        'what are my skills', 'what skills do i have',
+        'what is my education', 'where did i study',
+        'what is my current role', 'what do i do'
+    ]
+    
+    for question in memory_questions:
+        if question in user_input_lower:
+            return {
+                'intent': 'answer_career_question',
+                'args': {'question': user_input},
+                'type': 'function_call'
+            }
     
     if is_valid_url(user_input):
         return {

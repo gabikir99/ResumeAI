@@ -89,6 +89,7 @@ def chat_about_resumes(query, user_memory=None):
             memory_items.append(f"{key}: {value}")
         
         memory_context += ", ".join(memory_items)
+        memory_context += "\n\nIf the user asks about their personal information (like 'what is my name?', 'what experience do I have?', etc.), respond with the stored information in a natural way."
         
         # Insert memory context as a system message before the user query
         messages.insert(1, {"role": "system", "content": memory_context})
@@ -164,7 +165,7 @@ def main():
                 user_memory[info_type] = info_value
                 
                 # Instead of showing a storage message, respond naturally
-                response = chat_about_resumes(f"You mentioned your {info_type} is {info_value}. Let me remember that. How else can I help with your career or resume?")
+                response = chat_about_resumes(f"I've noted that your {info_type} is {info_value}. How can I help with your resume or career questions?", user_memory)
                 
             elif intent_info['intent'] == 'handle_off_topic':
                 print_streaming("I'm specialized in helping with resumes, job applications, and career advice.")
