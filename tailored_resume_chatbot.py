@@ -135,32 +135,29 @@ def main():
             # Handle the intent based on the classification
             if intent_info['intent'] == 'process_job_url':
                 summary = generate_resume_sections(intent_info['args']['url'])
-                return summary
                 
             elif intent_info['intent'] == 'process_job_description':
                 result = process_job_description(intent_info['args']['job_description'])
-                return result
                 
             elif intent_info['intent'] == 'answer_career_question':
                 response = chat_about_resumes(intent_info['args']['question'])
-                return response
                 
             elif intent_info['intent'] == 'store_personal_info':
                 # Store the personal information for future personalization
                 info_type = intent_info['args']['info_type']
                 info_value = intent_info['args']['info_value']
                 user_memory[info_type] = info_value
-                return f"Personal information stored: {info_type}"
+                print_streaming(f"Personal information stored: {info_type}")
                 
             elif intent_info['intent'] == 'handle_off_topic':
-                return "I'm specialized in helping with resumes, job applications, and career advice."
+                print_streaming("I'm specialized in helping with resumes, job applications, and career advice.")
                 
             else:
                 # Handle general responses or fallbacks
                 if 'message' in intent_info:
-                    return intent_info['message']
+                    print_streaming(intent_info['message'])
                 else:
-                    return "I'm not sure I understood that. Could you please rephrase?"
+                    print_streaming("I'm not sure I understood that. Could you please rephrase?")
                 
         except Exception as e:
             error_msg = f"An error occurred: {e}"
