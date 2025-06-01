@@ -37,10 +37,23 @@ class GPTService:
         memory_items = []
         for key, value in user_info.items():
             if value:
-                memory_items.append(f"{key}: {value}")
+                # Create more natural descriptions
+                if key == 'name':
+                    memory_items.append(f"The user's name is {value}")
+                elif key == 'career_interest':
+                    memory_items.append(f"The user wants to work in {value}")
+                elif key == 'current_role':
+                    memory_items.append(f"The user currently works as {value}")
+                elif key == 'experience':
+                    memory_items.append(f"The user has {value} of experience")
+                else:
+                    memory_items.append(f"The user's {key} is {value}")
         
-        memory_context = "User information: " + ", ".join(memory_items)
-        memory_context += "\n\nIf the user asks about their personal information, respond with the stored information naturally."
+        if memory_items:
+            memory_context = "IMPORTANT - User's Personal Information:\n" + "\n".join(memory_items)
+            memory_context += "\n\nAlways use this information to personalize your responses. Address the user by name when appropriate and reference their background naturally."
+        else:
+            memory_context = "No personal information stored yet."
         
         return memory_context
     
@@ -62,21 +75,21 @@ class GPTService:
                 from utils import print_streaming
                 print_streaming(content)
         
-        return ""
+        return full_response  # Return the full response instead of empty string
     
-    def generate_resume_sections(self, url, chat_history=None):
+    def generate_resume_sections(self, url, user_info=None, chat_history=None):
         """Generate resume sections from a job posting URL."""
         try:
             website = Website(url)
-            messages = self._create_messages(website, is_website=True, chat_history=chat_history)
+            messages = self._create_messages(website, is_website=True, user_info=user_info, chat_history=chat_history)
             return self._stream_response(messages, temperature=0.3)
         except Exception as e:
             return f"Error processing URL: {e}"
     
-    def process_job_description(self, text, chat_history=None):
+    def process_job_description(self, text, user_info=None, chat_history=None):
         """Process a job description directly from text."""
         try:
-            messages = self._create_messages(text, is_website=False, chat_history=chat_history)
+            messages = self._create_messages(text, is_website=False, user_info=user_info, chat_history=chat_history)
             return self._stream_response(messages, temperature=0.3)
         except Exception as e:
             return f"Error processing job description: {e}"

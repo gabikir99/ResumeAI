@@ -5,6 +5,8 @@ from utils import is_valid_url
 SYSTEM_PROMPT = """
 You are a friendly and professional career advisor chatbot specializing ONLY in resumes, job applications, interviews, and career advice.
 
+IMPORTANT: Always use the user's personal information when available to personalize responses.
+
 IMPORTANT BOUNDARIES: You should ONLY help with career-related topics including:
 - Resume writing and tailoring
 - Job applications and cover letters
@@ -26,7 +28,7 @@ When a user provides a job description, help them by generating:
 
 IMPORTANT: Do not use any Markdown formatting in your responses. Present all text as plain text only.
 
-PERSONALIZATION: If the user has previously shared personal information, incorporate this information naturally into your responses.
+PERSONALIZATION: Always incorporate the user's stored personal information naturally into your responses. If you know their name, use it. If you know their background, reference it appropriately.
 """
 
 INTENT_FUNCTIONS = [
@@ -93,7 +95,7 @@ INTENT_FUNCTIONS = [
             "properties": {
                 "info_type": {
                     "type": "string",
-                    "enum": ["name", "current_role", "experience", "skills", "education", "other"]
+                    "enum": ["name", "current_role", "experience", "skills", "education", "other", "career_interest"]
                 },
                 "info_value": {"type": "string", "description": "The information value"}
             },
@@ -145,9 +147,15 @@ class IntentClassifier:
         3. If it's a valid URL, use process_job_url
         4. If it's a long job description text, use process_job_description
         5. If it's a career-related question, use answer_career_question
-        6. If sharing personal info (name, experience, skills, etc.), use store_personal_info
-        7. If asking about stored info, use answer_career_question
-        8. If completely off-topic, use handle_off_topic{memory_context}
+        6. If sharing personal info (name, experience, skills, career interests, etc.), use store_personal_info
+        7. If asking about stored info or personal questions like "what is my name", use answer_career_question
+        8. If completely off-topic, use handle_off_topic
+        
+        For personal info detection:
+        - "my name is X" or "i am X" → store as name
+        - "i want to work in X" or "looking for X job" → store as career_interest
+        - "i have X experience" → store as experience
+        - "i work as X" → store as current_role{memory_context}
         """
         
         response = self.client.chat.completions.create(
@@ -195,22 +203,33 @@ class IntentClassifier:
         if is_valid_url(user_input):
             return {'intent': 'process_job_url', 'args': {'url': user_input}}
         
-        # Check for personal information
+        # Check for personal information with improved patterns
         personal_patterns = [
-            (r'my name is (\w+)', 'name'),
-            (r'i am (\w+)', 'name'),
-            (r'i have (\d+) years? of experience', 'experience'),
-            (r'i work as a(n)? (.+)', 'current_role'),
+            (r'my name is ([a-zA-Z\s]+)', 'name'),
+            (r'i am ([a-zA-Z\s]+)', 'name'),
+            (r'i have (\d+) years? of experience(?:\s+in\s+(.+))?', 'experience'),
+            (r'i work as a?n? (.+)', 'current_role'),
+            (r'i want to (?:work in|create|build|create a resume for) (.+)', 'career_interest'),
+            (r'looking for (.+) (?:job|position|role)', 'career_interest'),
         ]
         
         for pattern, info_type in personal_patterns:
             match = re.search(pattern, user_input_lower)
             if match:
-                info_value = match.group(1) if len(match.groups()) >= 1 else user_input
+                if info_type == 'experience' and len(match.groups()) > 1 and match.group(2):
+                    # Capture both years and field of experience
+                    info_value = f"{match.group(1)} years of experience in {match.group(2)}"
+                else:
+                    info_value = match.group(1).strip()
                 return {
                     'intent': 'store_personal_info',
                     'args': {'info_type': info_type, 'info_value': info_value}
                 }
+        
+        # Check for questions about personal info
+        personal_questions = ['what is my name', 'what job am i looking for', 'who am i']
+        if any(q in user_input_lower for q in personal_questions):
+            return {'intent': 'answer_career_question', 'args': {'question': user_input}}
         
         # Check for job description (long text with job-related keywords)
         job_indicators = ['job description', 'responsibilities', 'requirements', 'qualifications']
