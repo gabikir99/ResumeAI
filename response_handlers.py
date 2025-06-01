@@ -33,7 +33,10 @@ class ResponseHandlers:
                 f"Welcome back {name}! How can I help with your professional development?"
             ]
         
-        return random.choice(responses)
+        from utils import print_streaming
+        response = random.choice(responses)
+        print_streaming(response)
+        return ""
     
     def handle_goodbye(self, farewell, user_memory=None):
         """Handle user farewells with personalized responses."""
@@ -49,4 +52,7 @@ class ResponseHandlers:
                 f"Farewell {name}! Come back anytime for more career advice."
             ]
         
-        return random.choice(responses)
+        from utils import print_streaming
+        response = random.choice(responses)
+        print_streaming(response)
+        return ""

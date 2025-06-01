@@ -44,7 +44,9 @@ def main():
             response = _handle_intent(intent_info, gpt_service, response_handlers, user_memory)
             
             if response:
-                print(f"\n{response}")
+                print("\n", end="")
+                from utils import print_streaming
+                print_streaming(response)
                 
         except KeyboardInterrupt:
             print("\n\nGoodbye! Best of luck with your career journey.")
@@ -85,10 +87,16 @@ def _handle_intent(intent_info, gpt_service, response_handlers, user_memory):
         )
         
     elif intent == 'handle_off_topic':
-        return "I'm specialized in helping with resumes, job applications, and career advice. How can I assist you with your career today?"
+        from utils import print_streaming
+        response = "I'm specialized in helping with resumes, job applications, and career advice. How can I assist you with your career today?"
+        print_streaming(response)
+        return ""
         
     else:
-        return "I'm not sure I understood that. Could you please rephrase your question about careers or resumes?"
+        from utils import print_streaming
+        response = "I'm not sure I understood that. Could you please rephrase your question about careers or resumes?"
+        print_streaming(response)
+        return ""
 
 if __name__ == "__main__":
     main()

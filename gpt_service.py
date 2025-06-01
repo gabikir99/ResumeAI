@@ -56,8 +56,10 @@ class GPTService:
             if chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
                 full_response += content
+                from utils import print_streaming
+                print_streaming(content)
         
-        return full_response
+        return ""
     
     def generate_resume_sections(self, url):
         """Generate resume sections from a job posting URL."""
