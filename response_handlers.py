@@ -19,13 +19,13 @@ class ResponseHandlers:
             "Farewell! Come back anytime for more career advice."
         ]
     
-    def handle_greeting(self, greeting, user_memory=None):
+    def handle_greeting(self, greeting, user_info=None):
         """Handle user greetings with personalized responses."""
         responses = self.greeting_responses.copy()
         
         # Personalize greeting if we know the user's name
-        if user_memory and 'name' in user_memory:
-            name = user_memory['name']
+        if user_info and 'name' in user_info:
+            name = user_info['name']
             responses = [
                 f"Hello {name}! How can I help with your resume or job search today?",
                 f"Hi {name}! Ready to work on your career development?",
@@ -38,13 +38,13 @@ class ResponseHandlers:
         print_streaming(response)
         return ""
     
-    def handle_goodbye(self, farewell, user_memory=None):
+    def handle_goodbye(self, farewell, user_info=None):
         """Handle user farewells with personalized responses."""
         responses = self.farewell_responses.copy()
         
         # Personalize farewell if we know the user's name
-        if user_memory and 'name' in user_memory:
-            name = user_memory['name']
+        if user_info and 'name' in user_info:
+            name = user_info['name']
             responses = [
                 f"Goodbye {name}! Feel free to return when you need more help with your career.",
                 f"Take care {name}! I'm here when you need resume or job search assistance.",

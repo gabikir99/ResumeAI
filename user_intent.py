@@ -120,19 +120,19 @@ class IntentClassifier:
         """Initialize the intent classifier."""
         self.client = client
     
-    def classify_intent(self, user_input, user_memory=None):
+    def classify_intent(self, user_input, user_info=None):
         """Classify the user's intent."""
         try:
-            return self._classify_with_gpt(user_input, user_memory)
+            return self._classify_with_gpt(user_input, user_info)
         except Exception as e:
             print(f"GPT classification failed: {e}. Using fallback.")
             return self._simple_fallback_classification(user_input)
     
-    def _classify_with_gpt(self, user_input, user_memory=None):
+    def _classify_with_gpt(self, user_input, user_info=None):
         """Classify intent using GPT."""
         memory_context = ""
-        if user_memory:
-            memory_info = [f"{k}: {v}" for k, v in user_memory.items() if v]
+        if user_info:
+            memory_info = [f"{k}: {v}" for k, v in user_info.items() if v]
             if memory_info:
                 memory_context = f"\n\nUser's stored information: {', '.join(memory_info)}"
         
