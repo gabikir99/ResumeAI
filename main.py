@@ -112,7 +112,7 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager):
         from utils import print_streaming
         response = "I'm not sure I understood that. Could you please rephrase your question about careers or resumes?"
         print_streaming(response)
-        memory_manager.add_message(user_input, response)
+        memory_manager.add_message("Unknown query", response)
         return ""
 
 if __name__ == "__main__":
