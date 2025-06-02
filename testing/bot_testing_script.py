@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Comprehensive testing script for the Career Bot
-Tests memory, intent classification, and response quality
+Tests memory, intent classification, response quality, and PDF functionality
 """
 
 import os
@@ -9,6 +9,7 @@ import sys
 import time
 from dotenv import load_dotenv
 from openai import OpenAI
+from pathlib import Path
 
 # Add the current directory to path so we can import our modules
 sys.path.append('.')
@@ -17,6 +18,7 @@ from gpt_service import GPTService
 from response_handlers import ResponseHandlers
 from user_intent import IntentClassifier
 from memory_manager import MemoryManager
+from pdf_processor import PDFProcessor
 
 class BotTester:
     def __init__(self):
@@ -33,10 +35,14 @@ class BotTester:
         self.response_handlers = ResponseHandlers()
         self.intent_classifier = IntentClassifier(client)
         self.memory_manager = MemoryManager(k=15)
+        self.pdf_processor = PDFProcessor()
         
         self.test_results = []
         self.passed_tests = 0
         self.total_tests = 0
+        
+        # Path to test PDF file
+        self.test_pdf_path = Path("test.pdf")
     
     def simulate_user_input(self, user_input, expected_keywords=None, should_contain=None, should_not_contain=None):
         """Simulate a user input and test the response."""
@@ -188,6 +194,76 @@ class BotTester:
         self.total_tests += 1
         print(f"Current memory: {user_info}")
     
+    def test_pdf_functionality(self):
+        """Test PDF processing functionality."""
+        print("\n🔍 TESTING PDF FUNCTIONALITY")
+        print("="*60)
+        
+        # Check if test PDF exists
+        if not self.test_pdf_path.exists():
+            print(f"❌ Test PDF file not found at {self.test_pdf_path}")
+            self._record_test_result("PDF file existence check", False, ["Test PDF file not found"])
+            return False
+        
+        try:
+            # Test 1: PDF text extraction
+            print("\n📄 Testing PDF text extraction...")
+            with open(self.test_pdf_path, 'rb') as pdf_file:
+                extracted_text = self.pdf_processor.extract_text_from_pdf(pdf_file)
+            
+            # Check if extraction worked
+            if not extracted_text or len(extracted_text) < 50:
+                print(f"❌ PDF text extraction failed or returned too little text: {extracted_text}")
+                self._record_test_result("PDF text extraction", False, ["Extraction failed or returned too little text"])
+                return False
+            
+            print(f"✅ Successfully extracted {len(extracted_text)} characters from PDF")
+            print(f"Preview: {extracted_text[:100]}...")
+            self._record_test_result("PDF text extraction", True, [])
+            
+            # Test 2: Document type detection
+            print("\n🔍 Testing document type detection...")
+            doc_type = self.pdf_processor.detect_document_type(extracted_text)
+            print(f"Detected document type: {doc_type}")
+            
+            expected_type = "resume"  # Our test PDF is a resume
+            if doc_type != expected_type:
+                print(f"❌ Document type detection failed. Expected '{expected_type}', got '{doc_type}'")
+                self._record_test_result("Document type detection", False, [f"Expected '{expected_type}', got '{doc_type}'"])
+            else:
+                print(f"✅ Correctly detected document type: {doc_type}")
+                self._record_test_result("Document type detection", True, [])
+            
+            # Test 3: Processing the PDF content through GPT
+            print("\n🤖 Testing PDF content processing with GPT...")
+            
+            # Store the extracted text in memory
+            self.memory_manager.store_user_info("uploaded_resume_text", extracted_text[:500] + "...")
+            
+            # Process the resume with GPT
+            prompt = f"I've uploaded my resume. Can you analyze it and give me feedback? Here's the content:\n\n{extracted_text}"
+            response = self.gpt_service.chat_about_resumes(
+                prompt,
+                self.memory_manager.get_user_info(),
+                self.memory_manager.get_chat_history()
+            )
+            
+            # Check if response is meaningful
+            if not response or len(response) < 100:
+                print(f"❌ GPT processing of PDF content failed or returned too little text")
+                self._record_test_result("GPT processing of PDF", False, ["Response too short or empty"])
+            else:
+                print(f"✅ Successfully processed PDF with GPT")
+                print(f"Response preview: {response[:150]}...")
+                self._record_test_result("GPT processing of PDF", True, [])
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ PDF testing failed with error: {str(e)}")
+            self._record_test_result("PDF functionality", False, [f"Exception: {str(e)}"])
+            return False
+    
     def run_comprehensive_test(self):
         """Run a comprehensive test suite."""
         print("🤖 STARTING COMPREHENSIVE BOT TEST")
@@ -271,6 +347,9 @@ class BotTester:
             expected_keywords=["machine learning", "data science"]
         )
         
+        # Test 12: PDF functionality
+        self.test_pdf_functionality()
+        
         self._print_test_summary()
     
     def _print_test_summary(self):
@@ -295,6 +374,15 @@ def main():
     """Main function to run tests."""
     try:
         tester = BotTester()
+        
+        # Check for command line arguments
+        if len(sys.argv) > 1:
+            if sys.argv[1] == "--pdf-only":
+                # Run only PDF tests
+                tester.test_pdf_functionality()
+                return 0
+        
+        # Run all tests by default
         tester.run_comprehensive_test()
     except Exception as e:
         print(f"Failed to initialize tester: {e}")
