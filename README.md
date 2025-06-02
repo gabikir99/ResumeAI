@@ -1,13 +1,16 @@
-# AI-Powered Resume Tailoring Tool
+# AI-Powered Resume Assistant
 
-This Jupyter notebook automatically generates tailored resume sections based on job descriptions using OpenAI's API.
+An interactive CLI tool that helps with resume creation, job application optimization, and career advice using OpenAI's GPT models.
 
 ## Features
 
+- **Interactive Chat Interface**: Natural conversation with streaming responses
 - **Web Scraping**: Extracts job descriptions from URLs
 - **AI Analysis**: Uses OpenAI GPT to analyze job requirements
-- **Resume Generation**: Creates tailored Objective, Qualifications, and Technical Skills sections
-- **Markdown Output**: Clean, formatted output ready for use
+- **Resume Generation**: Creates tailored resume sections based on job descriptions
+- **Session Management**: Maintains conversation context with LangChain memory
+- **User Information Storage**: Remembers your details for personalized advice
+- **Intent Classification**: Intelligently understands what you're asking for
 
 ## Setup
 
@@ -21,25 +24,39 @@ This Jupyter notebook automatically generates tailored resume sections based on 
 2. Install required packages:
 
    ```bash
-   pip install openai python-dotenv requests beautifulsoup4 ipython
+   pip install -r requirements.txt
    ```
 
 3. Set up your OpenAI API key:
 
-   - Copy `.env.example` to `.env`
-   - Add your OpenAI API key to the `.env` file
+   - Create a `.env` file in the project root
+   - Add your OpenAI API key: `OPENAI_API_KEY=your-api-key-here`
    - Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-
-4. Run the Jupyter notebook:
-   ```bash
-   jupyter notebook Tailored_resume.ipynb
-   ```
 
 ## Usage
 
-1. Replace the job URL in the notebook with your target job posting
-2. Run all cells to generate tailored resume sections
-3. Copy the generated markdown output to your resume
+Run the interactive CLI:
+
+```bash
+python main.py
+```
+
+### Available Commands
+
+- `/new-session` - Start completely fresh session
+- `/session-info` - Show current session details
+- `/clear-user` - Clear user info only
+- `/clear-history` - Clear chat history only
+- `/memory` - Show current memory state
+- `/help` - Show commands again
+- `exit/quit` - Exit the program
+
+### Example Interactions
+
+- Paste a job URL to get tailored resume sections
+- Share your name, experience, and skills for personalized advice
+- Ask career-related questions for expert guidance
+- Submit job descriptions for analysis and resume optimization
 
 ## Requirements
 
