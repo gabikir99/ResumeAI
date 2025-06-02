@@ -1,34 +1,68 @@
 import re
 from utils import is_valid_url
 
-# System prompt for the resume advisor chatbot
+# Flexible and adaptive system prompt
 SYSTEM_PROMPT = """
-You are a friendly and professional career advisor chatbot specializing ONLY in resumes, job applications, interviews, and career advice.
+You are a friendly and professional career advisor chatbot specializing in resumes, job applications, interviews, and career advice.
 
 IMPORTANT: Always use the user's personal information when available to personalize responses.
 
-IMPORTANT BOUNDARIES: You should ONLY help with career-related topics including:
-- Resume writing and tailoring
+## Core Specializations:
+- Resume writing and optimization (all sections and formats)
 - Job applications and cover letters
-- Interview preparation
-- Career advice and development
-- Job search strategies
-- Professional networking
-- Salary negotiation
+- Interview preparation and strategies
+- Career development and planning
+- Job search strategies and networking
+- Salary negotiation and professional growth
 
-If a user asks about topics unrelated to careers, politely redirect them back to career-related assistance.
+## Resume Assistance Philosophy:
+You can help with ANY resume section or format the user requests, including but not limited to:
+- **Professional summaries** (also called objectives, mission statements, career summaries, professional profiles, etc.)
+- **Experience sections** (work history, professional experience, employment history)
+- **Skills sections** (core competencies, technical skills, relevant skills, key qualifications)
+- **Education sections** (academic background, certifications, training)
+- **Achievement highlights** (accomplishments, key achievements, highlights of qualifications)
+- **Project sections** (relevant projects, portfolio items, case studies)
+- **Additional sections** (volunteer work, publications, awards, etc.)
 
-When a user provides a job description, help them by generating:
+## Adaptive Response Approach:
+- **Recognize synonyms**: Understand that "summary statement" = "objective" = "professional profile" = "mission statement"
+- **Match user terminology**: Use the same words the user uses (if they say "summary," respond with "summary")
+- **Flexible formatting**: Adapt to different resume styles and user preferences
+- **Context-aware**: Tailor advice based on industry, career level, and specific goals
 
-1. An Objective — a brief 1–2 sentence summary of why they are a great fit for the role.
+## When Helping with Job-Related Content:
+- Analyze job descriptions and requirements thoroughly
+- Generate 6-7 specific, relevant qualification points that match the role
+- Organize skills into logical, industry-appropriate categories
+- Create compelling, personalized content using stored user information
+- Suggest improvements and optimizations based on best practices
 
-2. A list of exactly 6-7 Highlights of Qualifications — specific, relevant points about their skills, achievements, or experience that match the job.
+## Formatting Guidelines:
+Use clear, professional Markdown formatting:
+- **Bold** for section headers and key terms
+- Bullet points (-) for lists and qualifications
+- ## for main sections, ### for subsections
+- Emphasize important keywords with **bold**
+- Keep content scannable and well-organized
 
-3. A categorized list of Relevant Skills — organize skills into logical groups based on the job requirements.
+## Personalization Priority:
+Always incorporate the user's stored information:
+- Use their name naturally in conversations
+- Reference their background, experience, and career goals
+- Tailor all advice to their specific situation and industry
+- Build on previous conversation context
 
-IMPORTANT: Do not use any Markdown formatting in your responses. Present all text as plain text only.
+## Boundary Management:
+If asked about non-career topics, politely redirect: "I specialize in career and resume assistance. How can I help you with your professional development today?"
 
-PERSONALIZATION: Always incorporate the user's stored personal information naturally into your responses. If you know their name, use it. If you know their background, reference it appropriately.
+## Tone and Approach:
+- Friendly, encouraging, and professional
+- Direct and actionable advice
+- Supportive and confidence-building
+- Industry-aware and current with best practices
+
+Remember: Be flexible and adaptive. The user knows what they need - your job is to provide expert guidance regardless of the specific terminology they use.
 """
 
 INTENT_FUNCTIONS = [
@@ -142,20 +176,22 @@ class IntentClassifier:
         You are an intent classifier for a career advice chatbot. Analyze the user's input and determine the most appropriate action.
         
         Guidelines:
-        1. If it's a greeting, use handle_greeting
-        2. If it's a farewell, use handle_goodbye
+        1. If it's a greeting (hello, hi, hey), use handle_greeting
+        2. If it's a farewell (goodbye, bye, thanks), use handle_goodbye
         3. If it's a valid URL, use process_job_url
-        4. If it's a long job description text, use process_job_description
-        5. If it's a career-related question, use answer_career_question
-        6. If sharing personal info (name, experience, skills, career interests, etc.), use store_personal_info
-        7. If asking about stored info or personal questions like "what is my name", use answer_career_question
-        8. If completely off-topic, use handle_off_topic
+        4. If it's a long job description text (50+ words with job keywords), use process_job_description
+        5. If sharing personal info (name, experience, skills, career interests, etc.), use store_personal_info
+        6. If asking about stored info ("what is my name", "who am i"), use answer_career_question
         
-        For personal info detection:
-        - "my name is X" or "i am X" → store as name
-        - "i want to work in X" or "looking for X job" → store as career_interest
-        - "i have X experience" → store as experience
-        - "i work as X" → store as current_role{memory_context}
+        IMPORTANT - CAREER-RELATED REQUESTS (use answer_career_question):
+        - Resume help: "create resume", "write objective", "mission statement", "summary statement", "professional profile"
+        - Career advice: "career guidance", "job search help", "interview tips"
+        - Any request for resume sections: objective, summary, skills, experience, qualifications
+        - Career questions: "how to", "help with", "advice on" + career topics
+        
+        7. ONLY use handle_off_topic for completely non-career topics like weather, sports, cooking, etc.
+        
+        The user is asking for career help if they mention: resume, CV, job, career, work, professional, interview, objective, summary, mission statement, skills, qualifications, cover letter, application{memory_context}
         """
         
         response = self.client.chat.completions.create(
@@ -217,7 +253,6 @@ class IntentClassifier:
             match = re.search(pattern, user_input_lower)
             if match:
                 if info_type == 'experience' and len(match.groups()) > 1 and match.group(2):
-                    # Capture both years and field of experience
                     info_value = f"{match.group(1)} years of experience in {match.group(2)}"
                 else:
                     info_value = match.group(1).strip()
@@ -231,12 +266,29 @@ class IntentClassifier:
         if any(q in user_input_lower for q in personal_questions):
             return {'intent': 'answer_career_question', 'args': {'question': user_input}}
         
+        # IMPROVED: Check for career-related requests (this was missing!)
+        career_keywords = [
+            'resume', 'cv', 'objective', 'summary', 'mission statement', 'professional profile',
+            'cover letter', 'job application', 'interview', 'career', 'skills', 'experience',
+            'qualifications', 'achievements', 'work history', 'professional', 'statement',
+            'help me', 'create', 'write', 'build', 'develop'
+        ]
+        
+        # If any career keyword is found, it's likely a career question
+        if any(keyword in user_input_lower for keyword in career_keywords):
+            return {'intent': 'answer_career_question', 'args': {'question': user_input}}
+        
         # Check for job description (long text with job-related keywords)
         job_indicators = ['job description', 'responsibilities', 'requirements', 'qualifications']
         if len(user_input.split()) > 50 and any(indicator in user_input_lower for indicator in job_indicators):
             return {'intent': 'process_job_description', 'args': {'job_description': user_input}}
         
-        # Default to career question
+        # Check for completely off-topic (non-career) requests
+        off_topic_keywords = ['weather', 'sports', 'cooking', 'movie', 'music', 'game', 'food', 'travel']
+        if any(keyword in user_input_lower for keyword in off_topic_keywords):
+            return {'intent': 'handle_off_topic', 'args': {'off_topic_query': user_input}}
+        
+        # Default to career question (assume career-related unless clearly off-topic)
         return {'intent': 'answer_career_question', 'args': {'question': user_input}}
 
 def get_system_prompt():

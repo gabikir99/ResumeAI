@@ -8,7 +8,7 @@ from memory_manager import MemoryManager
 from utils import print_streaming
 
 def main():
-    """Main function to run the resume chatbot."""
+    """Main function to run the resume chatbot with enhanced session management."""
     # Load environment variables
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -23,10 +23,19 @@ def main():
     response_handlers = ResponseHandlers()
     intent_classifier = IntentClassifier(client)
     
-    # Initialize memory manager for conversation history and user info
+    # Initialize memory manager with session management
     memory_manager = MemoryManager(k=15)
     
     print("Welcome to your AI Career Assistant! How can I help you today?")
+    print(f"Session ID: {memory_manager.session_id[:8]}... (fresh start)")
+    print("\nAvailable commands:")
+    print("  /new-session    - Start completely fresh session")
+    print("  /session-info   - Show current session details")
+    print("  /clear-user     - Clear user info only")
+    print("  /clear-history  - Clear chat history only")
+    print("  /memory         - Show current memory state")
+    print("  /help           - Show commands again")
+    print("  exit/quit       - Exit the program")
     
     while True:
         try:
@@ -35,6 +44,55 @@ def main():
             if user_input.lower() in ['exit', 'quit']:
                 print("Goodbye! Best of luck with your career journey.")
                 break
+            
+            # Enhanced commands for session management
+            if user_input.lower() == '/new-session':
+                old_session = memory_manager.session_id[:8]
+                memory_manager.start_new_session()
+                print(f"🆕 Started completely new session!")
+                print(f"   Previous: {old_session}... → Current: {memory_manager.session_id[:8]}...")
+                continue
+                
+            if user_input.lower() == '/session-info':
+                info = memory_manager.get_session_info()
+                print(f"📊 Current Session Info:")
+                print(f"   Session ID: {info['session_id'][:8]}...")
+                print(f"   Started: {info['start_time'].strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"   User Info Items: {info['user_info_count']}")
+                print(f"   Chat History Words: {info['chat_history_length']}")
+                print(f"   Session Duration: {(info['start_time'] - memory_manager.session_start).total_seconds():.0f}s")
+                continue
+                
+            if user_input.lower() == '/clear-user':
+                memory_manager.clear_user_info_only()
+                continue
+                
+            if user_input.lower() == '/clear-history':
+                memory_manager.clear_chat_history_only()
+                continue
+            
+            if user_input.lower() == '/memory':
+                user_info = memory_manager.get_user_info()
+                chat_history = memory_manager.get_chat_history()
+                print(f"📋 Current Memory State:")
+                print(f"   Session: {memory_manager.session_id[:8]}...")
+                print(f"   User Info: {user_info if user_info else 'None stored'}")
+                print(f"   Chat History: {len(chat_history.split()) if chat_history else 0} words")
+                if chat_history:
+                    print(f"   Last Exchange: ...{chat_history[-100:]}" if len(chat_history) > 100 else f"   History: {chat_history}")
+                continue
+            
+            if user_input.lower() == '/help':
+                print("\n🤖 Available Commands:")
+                print("  /new-session    - Start completely fresh session (clears everything)")
+                print("  /session-info   - Show current session details")
+                print("  /clear-user     - Clear user info only (keep chat history)")
+                print("  /clear-history  - Clear chat history only (keep user info)")
+                print("  /memory         - Show what's currently stored")
+                print("  /help           - Show this help message")
+                print("  exit/quit       - Exit the program")
+                print("\n💡 Use /new-session to simulate starting a fresh conversation!")
+                continue
             
             if not user_input:
                 continue
@@ -107,9 +165,9 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
         
         # Create a more specific confirmation message based on what was stored
         if info_type == 'experience':
-            confirmation_message = f"Got it! I've noted that you have {info_value} in machine learning. This will be helpful for tailoring your data science resume."
+            confirmation_message = f"Got it! I've noted that you have {info_value}. This will be helpful for tailoring your data science resume."
         elif info_type == 'current_role':
-            confirmation_message = f"Perfect! I've noted that you work as {info_value}. Your software engineering background will be valuable for data science roles."
+            confirmation_message = f"Perfect! I've noted that you work as {info_value}. Your background will be valuable for data science roles."
         elif info_type == 'name':
             confirmation_message = f"Nice to meet you, {info_value}! How can I help with your career today?"
         elif info_type == 'career_interest':
