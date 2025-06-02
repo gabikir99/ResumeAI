@@ -6,6 +6,7 @@ from gpt_service import GPTService
 from response_handlers import ResponseHandlers
 from user_intent import IntentClassifier
 from memory_manager import MemoryManager
+from pdf_processor import PDFProcessor
 from flask_cors import CORS
 
 # Load environment variables
@@ -21,6 +22,7 @@ client = OpenAI(api_key=api_key)
 gpt_service = GPTService(client)
 response_handlers = ResponseHandlers()
 intent_classifier = IntentClassifier(client)
+pdf_processor = PDFProcessor()
 
 # Dictionary to store memory managers for different sessions
 session_memories = {}
@@ -191,23 +193,123 @@ def upload_file():
     memory_manager, session_id = get_memory_manager(session_id)
     
     try:
-        # Read file content
-        file_content = file.read().decode('utf-8')
+        # Check if it's a PDF file
+        if file.filename.lower().endswith('.pdf'):
+            # Process PDF file
+            file.seek(0)  # Reset file pointer to beginning
+            extracted_text = pdf_processor.extract_text_from_pdf(file)
+            
+            # Detect document type
+            doc_type = pdf_processor.detect_document_type(extracted_text)
+            
+            if doc_type == 'resume':
+                # Process as resume
+                response = gpt_service.process_job_description(
+                    f"This is a resume: \n\n{extracted_text}",
+                    memory_manager.get_user_info(),
+                    memory_manager.get_chat_history()
+                )
+                message_prefix = "[Uploaded resume PDF]"
+            else:
+                # Process as job description (default)
+                response = gpt_service.process_job_description(
+                    extracted_text,
+                    memory_manager.get_user_info(),
+                    memory_manager.get_chat_history()
+                )
+                message_prefix = "[Uploaded job description PDF]"
+            
+            # Add to memory
+            memory_manager.add_message(f"{message_prefix}: {file.filename}", response)
+            
+            return jsonify({
+                'response': response,
+                'session_id': session_id,
+                'filename': file.filename,
+                'document_type': doc_type,
+                'extracted_text_length': len(extracted_text)
+            })
+        else:
+            # Handle text files as before
+            file.seek(0)  # Reset file pointer to beginning
+            try:
+                file_content = file.read().decode('utf-8')
+            except UnicodeDecodeError:
+                return jsonify({'error': 'File is not a valid text or PDF document'}), 400
+            
+            # Process as job description
+            response = gpt_service.process_job_description(
+                file_content,
+                memory_manager.get_user_info(),
+                memory_manager.get_chat_history()
+            )
+            
+            # Add to memory
+            memory_manager.add_message(f"[Uploaded file: {file.filename}]", response)
+            
+            return jsonify({
+                'response': response,
+                'session_id': session_id,
+                'filename': file.filename
+            })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/upload/pdf', methods=['POST'])
+def upload_pdf():
+    """API endpoint specifically for PDF uploads."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    session_id = request.form.get('session_id', None)
+    
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if not file.filename.lower().endswith('.pdf'):
+        return jsonify({'error': 'File must be a PDF'}), 400
+    
+    # Get memory manager for this session
+    memory_manager, session_id = get_memory_manager(session_id)
+    
+    try:
+        # Extract text from PDF
+        extracted_text = pdf_processor.extract_text_from_pdf(file)
         
-        # Process as job description
-        response = gpt_service.process_job_description(
-            file_content,
-            memory_manager.get_user_info(),
-            memory_manager.get_chat_history()
-        )
+        # Detect document type
+        doc_type = pdf_processor.detect_document_type(extracted_text)
+        
+        # Store the extracted text in memory for future reference
+        memory_manager.store_user_info(f"uploaded_{doc_type}_text", extracted_text[:500] + "...")
+        
+        # Process based on document type
+        if doc_type == 'resume':
+            response = gpt_service.chat_about_resumes(
+                f"I've uploaded my resume. Can you analyze it and give me feedback? Here's the content:\n\n{extracted_text}",
+                memory_manager.get_user_info(),
+                memory_manager.get_chat_history()
+            )
+        else:
+            response = gpt_service.process_job_description(
+                extracted_text,
+                memory_manager.get_user_info(),
+                memory_manager.get_chat_history()
+            )
         
         # Add to memory
-        memory_manager.add_message(f"[Uploaded file: {file.filename}]", response)
+        memory_manager.add_message(
+            f"[Uploaded {doc_type} PDF: {file.filename}]", 
+            response
+        )
         
         return jsonify({
             'response': response,
             'session_id': session_id,
-            'filename': file.filename
+            'filename': file.filename,
+            'document_type': doc_type,
+            'extracted_text_preview': extracted_text[:200] + "..." if len(extracted_text) > 200 else extracted_text
         })
     
     except Exception as e:
