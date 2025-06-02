@@ -184,20 +184,23 @@ class IntentClassifier:
         You are an intent classifier for a career advice chatbot. Analyze the user's input and determine the most appropriate action.
         
         Guidelines:
-        1. **PRIORITY - Personal Info Storage**: If the input contains personal information (name, experience, role, interests), ALWAYS use store_personal_info FIRST, even if it also contains a greeting
+        1. **HIGHEST PRIORITY - Personal Info Storage**: If ANY personal information is mentioned, ALWAYS use store_personal_info, even if combined with greetings
         2. If it's a greeting without personal info (hello, hi, hey), use handle_greeting
         3. If it's a farewell (goodbye, bye, thanks), use handle_goodbye
         4. If it's a valid URL, use process_job_url
         5. If it's a long job description text (50+ words with job keywords), use process_job_description
         6. If asking about stored info ("what is my name", "who am i"), use answer_career_question
         
-        IMPORTANT - PERSONAL INFO STORAGE PATTERNS (use store_personal_info):
-        - Names: "hello my name is X", "hi I'm X", "my name is X", "I am X"
-        - Experience: "I have X years", "X years of experience"
-        - Current role: "I work as", "I'm a", "my job is"
-        - Career interests: "I want to work in", "looking for X positions", "create resume for X", "interested in X roles"
+        **CRITICAL EXAMPLES for store_personal_info:**
+        - "hello my name is John" → store_personal_info with name="John"
+        - "hi I'm Sarah" → store_personal_info with name="Sarah"
+        - "my name is Alex" → store_personal_info with name="Alex"
+        - "I have 5 years experience" → store_personal_info with experience
+        - "I work as a developer" → store_personal_info with current_role
+        - "I want to work in data science" → store_personal_info with career_interest
+        - "create resume for marketing" → store_personal_info with career_interest
         
-        **CRITICAL RULE**: If a message contains BOTH a greeting AND personal information (like "hello my name is John"), classify it as store_personal_info NOT handle_greeting. The personal information takes priority.
+        **NEVER** classify inputs containing personal information as anything other than store_personal_info.
         
         CAREER-RELATED REQUESTS (use answer_career_question):
         - Resume help: "create resume", "write objective", "mission statement", "summary statement", "professional profile"
@@ -207,7 +210,7 @@ class IntentClassifier:
         
         ONLY use handle_off_topic for completely non-career topics like weather, sports, cooking, etc.
         
-        The user is asking for career help if they mention: resume, CV, job, career, work, professional, interview, objective, summary, mission statement, skills, qualifications, cover letter, application{memory_context}
+        Remember: Personal information detection takes absolute priority over everything else.{memory_context}
         """
         
         response = self.client.chat.completions.create(
@@ -231,11 +234,9 @@ class IntentClassifier:
                 'type': 'function_call'
             }
         else:
-            return {
-                'intent': 'general_response',
-                'message': response.choices[0].message.content,
-                'type': 'text_response'
-            }
+            # If GPT didn't call a function, fall back to rule-based classification
+            print("GPT didn't call a function, falling back to rule-based classification")
+            return self._simple_fallback_classification(user_input)
     
     def _simple_fallback_classification(self, user_input):
         """Simple rule-based fallback classification."""

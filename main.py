@@ -165,9 +165,9 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
         
         # Create a more specific confirmation message based on what was stored
         if info_type == 'experience':
-            confirmation_message = f"Got it! I've noted that you have {info_value}. This will be helpful for tailoring your data science resume."
+            confirmation_message = f"Got it! I've noted that you have {info_value}. This will be helpful for tailoring your resume."
         elif info_type == 'current_role':
-            confirmation_message = f"Perfect! I've noted that you work as {info_value}. Your background will be valuable for data science roles."
+            confirmation_message = f"Perfect! I've noted that you work as {info_value}. Your background will be valuable for your career goals."
         elif info_type == 'name':
             confirmation_message = f"Nice to meet you, {info_value}! How can I help with your career today?"
         elif info_type == 'career_interest':
