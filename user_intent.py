@@ -184,20 +184,28 @@ class IntentClassifier:
         You are an intent classifier for a career advice chatbot. Analyze the user's input and determine the most appropriate action.
         
         Guidelines:
-        1. If it's a greeting (hello, hi, hey), use handle_greeting
-        2. If it's a farewell (goodbye, bye, thanks), use handle_goodbye
-        3. If it's a valid URL, use process_job_url
-        4. If it's a long job description text (50+ words with job keywords), use process_job_description
-        5. If sharing personal info (name, experience, skills, career interests, etc.), use store_personal_info
+        1. **PRIORITY - Personal Info Storage**: If the input contains personal information (name, experience, role, interests), ALWAYS use store_personal_info FIRST, even if it also contains a greeting
+        2. If it's a greeting without personal info (hello, hi, hey), use handle_greeting
+        3. If it's a farewell (goodbye, bye, thanks), use handle_goodbye
+        4. If it's a valid URL, use process_job_url
+        5. If it's a long job description text (50+ words with job keywords), use process_job_description
         6. If asking about stored info ("what is my name", "who am i"), use answer_career_question
         
-        IMPORTANT - CAREER-RELATED REQUESTS (use answer_career_question):
+        IMPORTANT - PERSONAL INFO STORAGE PATTERNS (use store_personal_info):
+        - Names: "hello my name is X", "hi I'm X", "my name is X", "I am X"
+        - Experience: "I have X years", "X years of experience"
+        - Current role: "I work as", "I'm a", "my job is"
+        - Career interests: "I want to work in", "looking for X positions", "create resume for X", "interested in X roles"
+        
+        **CRITICAL RULE**: If a message contains BOTH a greeting AND personal information (like "hello my name is John"), classify it as store_personal_info NOT handle_greeting. The personal information takes priority.
+        
+        CAREER-RELATED REQUESTS (use answer_career_question):
         - Resume help: "create resume", "write objective", "mission statement", "summary statement", "professional profile"
         - Career advice: "career guidance", "job search help", "interview tips"
         - Any request for resume sections: objective, summary, skills, experience, qualifications
         - Career questions: "how to", "help with", "advice on" + career topics
         
-        7. ONLY use handle_off_topic for completely non-career topics like weather, sports, cooking, etc.
+        ONLY use handle_off_topic for completely non-career topics like weather, sports, cooking, etc.
         
         The user is asking for career help if they mention: resume, CV, job, career, work, professional, interview, objective, summary, mission statement, skills, qualifications, cover letter, application{memory_context}
         """
@@ -233,7 +241,35 @@ class IntentClassifier:
         """Simple rule-based fallback classification."""
         user_input_lower = user_input.strip().lower()
         
-        # Check for greetings
+        # PRIORITY: Check for personal information FIRST (even if combined with greetings)
+        personal_patterns = [
+            (r'(?:hello|hi|hey)?\s*my name is ([a-zA-Z\s]+)', 'name'),
+            (r'(?:hello|hi|hey)?\s*i am ([a-zA-Z\s]+)', 'name'),
+            (r'(?:hello|hi|hey)?\s*i\'m ([a-zA-Z\s]+)', 'name'),
+            (r'i have (\d+) years? of experience(?:\s+in\s+(.+))?', 'experience'),
+            (r'i work as a?n? (.+)', 'current_role'),
+            (r'i want to (?:work in|create|build|create a resume for) (.+)', 'career_interest'),
+            (r'looking for (.+) (?:job|position|role)', 'career_interest'),
+            (r'create (?:a )?resume for (.+)', 'career_interest'),
+            (r'interested in (.+) (?:roles?|positions?|jobs?)', 'career_interest'),
+        ]
+        
+        for pattern, info_type in personal_patterns:
+            match = re.search(pattern, user_input_lower)
+            if match:
+                if info_type == 'experience' and len(match.groups()) > 1 and match.group(2):
+                    info_value = f"{match.group(1)} years of experience in {match.group(2)}"
+                else:
+                    info_value = match.group(1).strip()
+                    if info_type == 'name':
+                        info_value = info_value.title()  # Capitalize name properly
+                
+                return {
+                    'intent': 'store_personal_info',
+                    'args': {'info_type': info_type, 'info_value': info_value}
+                }
+        
+        # Check for greetings (only if no personal info was found)
         greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']
         if any(greeting in user_input_lower for greeting in greetings):
             return {'intent': 'handle_greeting', 'args': {'greeting': user_input}}
@@ -246,28 +282,6 @@ class IntentClassifier:
         # Check for URLs
         if is_valid_url(user_input):
             return {'intent': 'process_job_url', 'args': {'url': user_input}}
-        
-        # Check for personal information with improved patterns
-        personal_patterns = [
-            (r'my name is ([a-zA-Z\s]+)', 'name'),
-            (r'i am ([a-zA-Z\s]+)', 'name'),
-            (r'i have (\d+) years? of experience(?:\s+in\s+(.+))?', 'experience'),
-            (r'i work as a?n? (.+)', 'current_role'),
-            (r'i want to (?:work in|create|build|create a resume for) (.+)', 'career_interest'),
-            (r'looking for (.+) (?:job|position|role)', 'career_interest'),
-        ]
-        
-        for pattern, info_type in personal_patterns:
-            match = re.search(pattern, user_input_lower)
-            if match:
-                if info_type == 'experience' and len(match.groups()) > 1 and match.group(2):
-                    info_value = f"{match.group(1)} years of experience in {match.group(2)}"
-                else:
-                    info_value = match.group(1).strip()
-                return {
-                    'intent': 'store_personal_info',
-                    'args': {'info_type': info_type, 'info_value': info_value}
-                }
         
         # Check for questions about personal info
         personal_questions = ['what is my name', 'what job am i looking for', 'who am i']

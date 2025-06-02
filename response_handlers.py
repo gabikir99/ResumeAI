@@ -21,10 +21,8 @@ class ResponseHandlers:
     
     def handle_greeting(self, greeting, user_info=None):
         """Handle user greetings with personalized responses."""
-        responses = self.greeting_responses.copy()
-        
-        # Personalize greeting if we know the user's name
-        if user_info and 'name' in user_info:
+        # Check if we have the user's name
+        if user_info and 'name' in user_info and user_info['name']:
             name = user_info['name']
             responses = [
                 f"Hello {name}! How can I help with your resume or job search today?",
@@ -32,16 +30,17 @@ class ResponseHandlers:
                 f"Greetings {name}! What career assistance do you need today?",
                 f"Welcome back {name}! How can I help with your professional development?"
             ]
+        else:
+            # Use generic responses if no name is stored
+            responses = self.greeting_responses.copy()
         
         response = random.choice(responses)
-        return response  # Return instead of printing directly
+        return response
     
     def handle_goodbye(self, farewell, user_info=None):
         """Handle user farewells with personalized responses."""
-        responses = self.farewell_responses.copy()
-        
-        # Personalize farewell if we know the user's name
-        if user_info and 'name' in user_info:
+        # Check if we have the user's name
+        if user_info and 'name' in user_info and user_info['name']:
             name = user_info['name']
             responses = [
                 f"Goodbye {name}! Feel free to return when you need more help with your career.",
@@ -49,6 +48,9 @@ class ResponseHandlers:
                 f"Until next time {name}! Best of luck with your career journey.",
                 f"Farewell {name}! Come back anytime for more career advice."
             ]
+        else:
+            # Use generic responses if no name is stored
+            responses = self.farewell_responses.copy()
         
         response = random.choice(responses)
-        return response  # Return instead of printing directly
+        return response

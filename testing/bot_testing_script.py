@@ -42,7 +42,7 @@ class BotTester:
         self.total_tests = 0
         
         # Path to test PDF file
-        self.test_pdf_path = Path("test.pdf")
+        self.test_pdf_path = Path("testing/test.pdf")
     
     def simulate_user_input(self, user_input, expected_keywords=None, should_contain=None, should_not_contain=None):
         """Simulate a user input and test the response."""
@@ -68,6 +68,55 @@ class BotTester:
             
             # Test response quality
             self._test_response_quality(user_input, response, expected_keywords, should_contain, should_not_contain)
+            
+            return response
+            
+        except Exception as e:
+            print(f"ERROR: {e}")
+            self._record_test_result(user_input, False, f"Exception occurred: {e}")
+            return None
+    
+    def simulate_greeting_with_name(self, user_input, expected_name, expected_keywords=None, should_contain=None):
+        """Special test for greeting with name that should store name and then give personalized greeting."""
+        print(f"\n{'='*60}")
+        print(f"USER INPUT: {user_input}")
+        print(f"{'='*60}")
+        
+        try:
+            # Classify intent
+            intent_info = self.intent_classifier.classify_intent(user_input, self.memory_manager.get_user_info())
+            print(f"CLASSIFIED INTENT: {intent_info['intent']}")
+            if 'args' in intent_info:
+                print(f"INTENT ARGS: {intent_info['args']}")
+            
+            # Handle intent and get response
+            response = self._handle_intent(intent_info, user_input)
+            
+            # Add to memory
+            if response:
+                self.memory_manager.add_message(user_input, response)
+            
+            print(f"\nBOT RESPONSE: {response}")
+            
+            # Check if name was stored
+            user_info = self.memory_manager.get_user_info()
+            if 'name' in user_info and user_info['name'] == expected_name:
+                print(f"✅ Name successfully stored: {expected_name}")
+                
+                # Now test if subsequent greetings use the name
+                print(f"\n--- Testing follow-up greeting personalization ---")
+                follow_up_response = self.response_handlers.handle_greeting("hi there", user_info)
+                print(f"FOLLOW-UP GREETING: {follow_up_response}")
+                
+                if expected_name in follow_up_response:
+                    print("✅ Follow-up greeting properly personalized")
+                    self._record_test_result(user_input, True, [])
+                else:
+                    print(f"❌ Follow-up greeting not personalized")
+                    self._record_test_result(user_input, False, ["Follow-up greeting not personalized"])
+            else:
+                print(f"❌ Name not stored properly")
+                self._record_test_result(user_input, False, ["Name not stored"])
             
             return response
             
@@ -269,11 +318,10 @@ class BotTester:
         print("🤖 STARTING COMPREHENSIVE BOT TEST")
         print("="*60)
         
-        # Test 1: Initial greeting and name storage
-        self.simulate_user_input(
+        # Test 1: Initial greeting and name storage (SPECIAL TEST)
+        self.simulate_greeting_with_name(
             "hello my name is Gavriel Kirichenko",
-            expected_keywords=["Gavriel"],
-            should_not_contain=["I'm here to assist you, Gavriel! If you have specific"]
+            "Gavriel Kirichenko"
         )
         self.check_memory("name", "Gavriel Kirichenko")
         
@@ -328,7 +376,7 @@ class BotTester:
             expected_keywords=["Gavriel Kirichenko", "software engineer", "data science", "machine learning"]
         )
         
-        # Test 9: Greeting with stored name
+        # Test 9: Greeting with stored name (should now be personalized)
         self.simulate_user_input(
             "hi there",
             expected_keywords=["Gavriel"],
