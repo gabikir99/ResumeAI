@@ -7,8 +7,10 @@ export default function App({ onSendMessage, onFileUpload }) {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,6 +37,7 @@ export default function App({ onSendMessage, onFileUpload }) {
       setShowChat(false);
       setMessages([]);
       setInputMessage('');
+      setSelectedFile(null); // Clear selected file on close
     }, 300);
   };
 
@@ -42,59 +45,59 @@ export default function App({ onSendMessage, onFileUpload }) {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const fileInputRef = useRef(null);
-  const [selectedFile, setSelectedFile] = useState(null); 
-
   const handleAttachmentClick = () => {
-    fileInputRef.current.click(); 
-  }
+    fileInputRef.current.click();
+  };
 
-   const handleFileChange = (event) => {
+  const handleFileChange = (event) => {
     const file = event.target.files[0];
     if (file) {
       setSelectedFile(file);
-      // Call your upload logic here, or pass the file to a parent handler
       if (onFileUpload) onFileUpload(file);
     }
   };
 
-  const simulateAIResponse = (userMessage) => {
+  const simulateAIResponse = (userMessage, file) => {
     const responses = [
-      "I'd be happy to help you optimize your resume! Could you tell me more about the specific job you're applying for?",
+      file
+        ? `Received your file: ${file.name}. I can analyze it for resume optimization. Would you like me to suggest improvements based on this file?`
+        : "I'd be happy to help you optimize your resume! Could you tell me more about the specific job you're applying for?",
       "That's a great question! Based on current industry trends, I recommend highlighting your key achievements with quantifiable results.",
       "For that type of role, you'll want to emphasize your technical skills and any relevant project experience. What's your background?",
       "I can definitely help with that! Let me analyze the job requirements and suggest some improvements to make your resume stand out.",
       "Excellent! Here are some tips to make your resume more compelling for recruiters in that field...",
       "That's exactly the kind of experience employers are looking for! How would you like to present it on your resume?",
     ];
-    
-    return responses[Math.floor(Math.random() * responses.length)];
+    return file ? responses[0] : responses[Math.floor(Math.random() * responses.length)];
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() && !selectedFile) return;
 
     const userMessage = {
       id: Date.now(),
       text: inputMessage.trim(),
+      file: selectedFile ? { name: selectedFile.name } : null,
       sender: 'user',
-      time: formatTime()
+      time: formatTime(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInputMessage('');
+    setSelectedFile(null); // Clear the file after sending
+    fileInputRef.current.value = null; // Reset file input
     setIsTyping(true);
 
     // Simulate AI thinking time
     setTimeout(() => {
       const aiResponse = {
         id: Date.now() + 1,
-        text: simulateAIResponse(userMessage.text),
+        text: simulateAIResponse(userMessage.text, userMessage.file),
         sender: 'ai',
-        time: formatTime()
+        time: formatTime(),
       };
 
-      setMessages(prev => [...prev, aiResponse]);
+      setMessages((prev) => [...prev, aiResponse]);
       setIsTyping(false);
     }, 1000 + Math.random() * 2000); // Random delay between 1-3 seconds
   };
@@ -145,12 +148,16 @@ export default function App({ onSendMessage, onFileUpload }) {
                     <div>
                       <div className="message-content">
                         {message.text}
+                        {message.file && (
+                          <div className="file-attachment">
+                            📎 <span>{message.file.name}</span>
+                          </div>
+                        )}
                       </div>
                       <div className="message-time">{message.time}</div>
                     </div>
                   </div>
                 ))}
-                
                 {isTyping && (
                   <div className="message ai-message">
                     <div className="message-avatar">🤖</div>
@@ -182,29 +189,29 @@ export default function App({ onSendMessage, onFileUpload }) {
               />
               <button
                 onClick={handleSendMessage}
-                disabled={!inputMessage.trim() || isTyping}
+                disabled={(!inputMessage.trim() && !selectedFile) || isTyping}
                 className="send-button"
               >
                 ➤
               </button>
-                <button
-        type="button"
-        className="attach-button"
-        onClick={handleAttachmentClick}
-        title="Attach resume (PDF, DOC, DOCX)"
-      >
-        📎
-      </button>
-      <input
-        type="file"
-        ref={fileInputRef}
-        style={{ display: 'none' }}
-        accept=".pdf,.doc,.docx"
-        onChange={handleFileChange}
-      />
-      {selectedFile && (
-        <span className="selected-file-name">{selectedFile.name}</span>
-      )}
+              <button
+                type="button"
+                className="attach-button"
+                onClick={handleAttachmentClick}
+                title="Attach resume (PDF, DOC, DOCX)"
+              >
+                📎
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept=".pdf,.doc,.docx"
+                onChange={handleFileChange}
+              />
+              {selectedFile && (
+                <span className="selected-file-name">{selectedFile.name}</span>
+              )}
             </div>
           </div>
         </div>

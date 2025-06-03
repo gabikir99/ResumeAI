@@ -548,7 +548,18 @@ body {
   gap: 12px;
   padding: 16px 0;
 }
+.file-attachment {
+  margin-top: 8px;
+  font-size: 0.9em;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 
+.file-attachment span {
+  text-decoration: underline;
+}
 .typing-dots {
   display: flex;
   gap: 4px;
