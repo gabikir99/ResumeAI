@@ -35,11 +35,33 @@ An interactive CLI tool that helps with resume creation, job application optimiz
 
 ## Usage
 
+### Command Line
+
 Run the interactive CLI:
 
 ```bash
 python main.py
 ```
+
+### Web App
+
+You can also use the provided React front‑end which talks to `app.py`.
+
+1. Start the Flask API:
+
+   ```bash
+   python app.py
+   ```
+
+2. In another terminal start the React dev server:
+
+   ```bash
+   cd frontend
+   npm install
+   npm start
+   ```
+
+The React app will send requests to `/api/*` endpoints served by Flask.
 
 ### Available Commands
 
