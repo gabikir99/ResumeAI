@@ -295,7 +295,6 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [connectionError, setConnectionError] = useState(false);
-  const [streamingMessage, setStreamingMessage] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -363,7 +362,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
     }
   };
 
-  // Fixed API base URL - this was the main issue
+  // Fixed API base URL
   const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   // Persist session ID so chats remain consistent across reloads
@@ -383,27 +382,6 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
       testServerConnection();
     }
   }, [showChat]);
-
-  // Streaming text effect (now used for UI display only)
-  const streamText = (text, callback) => {
-    setStreamingMessage('');
-    setIsTyping(true);
-    
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index < text.length) {
-        setStreamingMessage(prev => prev + text[index]);
-        index++;
-      } else {
-        clearInterval(interval);
-        setIsTyping(false);
-        setStreamingMessage('');
-        callback(text);
-      }
-    }, 20); // Adjust speed here (lower = faster)
-    
-    return () => clearInterval(interval);
-  };
 
   const testServerConnection = async () => {
     try {
@@ -439,18 +417,17 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const originalMessage = inputMessage.trim();
     setInputMessage('');
     setIsTyping(true);
     setConnectionError(false);
-    
-    // Create a placeholder for the AI response that will be updated as text streams in
+
     const aiResponseId = Date.now() + 1;
     const aiResponseTime = formatTime();
-    setStreamingMessage('');
-    
-    // Add an empty AI message that will be updated with streaming content
+
+    // Add empty AI message that will be updated
     setMessages((prev) => [
-      ...prev, 
+      ...prev,
       {
         id: aiResponseId,
         text: '',
@@ -461,121 +438,108 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
     ]);
 
     try {
-      let newSession = sessionId;
+      // Try streaming first
+      const response = await fetch(`${API_BASE}/api/chat-stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          message: originalMessage, 
+          session_id: sessionId 
+        })
+      });
 
-      if (selectedFile) {
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        if (sessionId) formData.append('session_id', sessionId);
+      if (response.ok && response.body) {
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = '';
 
-        console.log('Uploading file to:', `${API_BASE}/api/upload`);
-        
-        const response = await fetch(`${API_BASE}/api/upload`, {
-          method: 'POST',
-          body: formData,
-        });
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
 
-        if (!response.ok) {
-          throw new Error(`Upload failed with status: ${response.status}`);
-        }
+          const chunk = decoder.decode(value, { stream: true });
+          fullResponse += chunk;
 
-        const data = await response.json();
-        const aiText = data.response || 'File uploaded successfully, but no response received.';
-        newSession = data.session_id || newSession;
-        
-        // Update the streaming message with the complete response
-        setStreamingMessage(aiText);
-        
-        // Update the AI message with the complete text
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === aiResponseId 
-              ? { ...msg, text: aiText, isStreaming: false } 
-              : msg
-          )
-        );
-        
-        // Clear file input after successful upload
-        fileInputRef.current.value = '';
-        setSelectedFile(null);
-      } else {
-        console.log('Sending message to:', `${API_BASE}/api/chat`);
-        
-        const response = await fetch(`${API_BASE}/api/chat`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            message: userMessage.text, 
-            session_id: sessionId 
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Chat request failed with status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const aiText = data.response || 'Message sent successfully, but no response received.';
-        newSession = data.session_id || newSession;
-        
-        // Simulate streaming for the response
-        let streamedText = '';
-        const words = aiText.split(' ');
-        
-        for (let i = 0; i < words.length; i++) {
-          await new Promise(resolve => setTimeout(resolve, 30)); // Adjust speed as needed
-          streamedText += (i > 0 ? ' ' : '') + words[i];
-          setStreamingMessage(streamedText);
           
-          // Update the message in the messages array
-          setMessages(prev => 
-            prev.map(msg => 
+          setMessages(prev =>
+            prev.map(msg =>
               msg.id === aiResponseId 
-                ? { ...msg, text: streamedText, isStreaming: i < words.length - 1 } 
+                ? { ...msg, text: fullResponse, isStreaming: true } 
                 : msg
             )
           );
+          console.log("Chunk:", chunk);
         }
+
+        // Finalize the message
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === aiResponseId 
+              ? { ...msg, text: fullResponse || '[Empty Response]', isStreaming: false } 
+              : msg
+          )
+        );
+
+      } else {
+        // Fall back to regular API call
+        console.log('Streaming failed, trying regular API...');
+        const fallbackResponse = await fetch(`${API_BASE}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            message: originalMessage, 
+            session_id: sessionId 
+          })
+        });
+
+        if (!fallbackResponse.ok) {
+          throw new Error(`API request failed with status: ${fallbackResponse.status}`);
+        }
+
+        const data = await fallbackResponse.json();
+        
+        // Update session ID if provided
+        if (data.session_id && data.session_id !== sessionId) {
+          setSessionId(data.session_id);
+        }
+
+        // Update the message with the response
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === aiResponseId 
+              ? { 
+                  ...msg, 
+                  text: data.response || 'Sorry, I couldn\'t generate a response.', 
+                  isStreaming: false 
+                } 
+              : msg
+          )
+        );
       }
 
-      if (newSession && newSession !== sessionId) {
-        setSessionId(newSession);
-      }
-      
     } catch (error) {
       console.error('Error in handleSendMessage:', error);
       setConnectionError(true);
-      
-      let errorMessage = 'Sorry, I encountered an error. ';
-      
-      if (error.message.includes('Failed to fetch')) {
-        errorMessage += 'Please make sure the backend server is running on http://localhost:5000';
-      } else if (error.message.includes('status: 500')) {
-        errorMessage += 'There was a server error. Please check the backend logs.';
-      } else if (error.message.includes('status: 404')) {
-        errorMessage += 'The API endpoint was not found. Please check the backend configuration.';
-      } else {
-        errorMessage += `Error: ${error.message}`;
-      }
-      
-      // Update the existing AI message with the error
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === aiResponseId 
-            ? { 
-                ...msg, 
-                text: errorMessage, 
-                isStreaming: false,
-                isError: true 
-              } 
+
+      // Show error message
+      const errorMessage = connectionError 
+        ? `Connection error: ${error.message}\n\nPlease check that your backend server is running on ${API_BASE}`
+        : `Sorry, I encountered an error: ${error.message}`;
+
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === aiResponseId
+            ? { ...msg, text: errorMessage, isStreaming: false, isError: true }
             : msg
         )
       );
     } finally {
       setIsTyping(false);
-      setStreamingMessage('');
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
