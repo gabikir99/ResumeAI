@@ -6,9 +6,10 @@ from response_handlers import ResponseHandlers
 from user_intent import IntentClassifier
 from memory_manager import MemoryManager
 from utils import print_streaming
+from rate_limit import InMemoryRateLimiter
 
 def main():
-    """Main function to run the resume chatbot with enhanced session management."""
+    """Main function to run the resume chatbot with in-memory rate limiting."""
     # Load environment variables
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
@@ -16,6 +17,9 @@ def main():
     if not api_key:
         print("Error: OPENAI_API_KEY not found in environment variables.")
         return
+    
+    # Initialize in-memory rate limiter (50 messages per 24 hours)
+    rate_limiter = InMemoryRateLimiter(message_limit=50, reset_period_hours=24)
     
     # Initialize services
     client = OpenAI(api_key=api_key)
@@ -25,12 +29,19 @@ def main():
     
     # Initialize memory manager with session management
     memory_manager = MemoryManager(k=15)
+    session_id = memory_manager.session_id
     
     print("Welcome to your AI Career Assistant! How can I help you today?")
-    print(f"Session ID: {memory_manager.session_id[:8]}... (fresh start)")
+    print(f"Session ID: {session_id[:8]}...")
+    
+    # Show initial rate limit status
+    limit_status = rate_limiter.get_session_stats(session_id)
+    print(f"📊 Rate Limit: {limit_status['remaining']}/{limit_status['limit']} messages remaining")
+    
     print("\nAvailable commands:")
     print("  /new-session    - Start completely fresh session")
     print("  /session-info   - Show current session details")
+    print("  /rate-limit     - Check rate limit status")
     print("  /clear-user     - Clear user info only")
     print("  /clear-history  - Clear chat history only")
     print("  /memory         - Show current memory state")
@@ -45,12 +56,28 @@ def main():
                 print("Goodbye! Best of luck with your career journey.")
                 break
             
+            # Rate limit command
+            if user_input.lower() == '/rate-limit':
+                stats = rate_limiter.get_session_stats(session_id)
+                print(f"📊 Rate Limit Status:")
+                print(f"   Messages used: {stats['current_count']}/{stats['limit']}")
+                print(f"   Messages remaining: {stats['remaining']}")
+                if stats['reset_time']:
+                    print(f"   Resets at: {stats['reset_time'].strftime('%Y-%m-%d %H:%M:%S')}")
+                    print(f"   Time until reset: {stats['time_until_reset']}")
+                continue
+            
             # Enhanced commands for session management
             if user_input.lower() == '/new-session':
                 old_session = memory_manager.session_id[:8]
                 memory_manager.start_new_session()
+                session_id = memory_manager.session_id
                 print(f"🆕 Started completely new session!")
-                print(f"   Previous: {old_session}... → Current: {memory_manager.session_id[:8]}...")
+                print(f"   Previous: {old_session}... → Current: {session_id[:8]}...")
+                
+                # Show rate limit for new session
+                limit_status = rate_limiter.get_session_stats(session_id)
+                print(f"📊 Rate Limit: {limit_status['remaining']}/{limit_status['limit']} messages remaining")
                 continue
                 
             if user_input.lower() == '/session-info':
@@ -60,7 +87,11 @@ def main():
                 print(f"   Started: {info['start_time'].strftime('%Y-%m-%d %H:%M:%S')}")
                 print(f"   User Info Items: {info['user_info_count']}")
                 print(f"   Chat History Words: {info['chat_history_length']}")
-                print(f"   Session Duration: {(info['start_time'] - memory_manager.session_start).total_seconds():.0f}s")
+                
+                # Add rate limit info
+                stats = rate_limiter.get_session_stats(session_id)
+                print(f"   Messages used: {stats['current_count']}/{stats['limit']}")
+                print(f"   Messages remaining: {stats['remaining']}")
                 continue
                 
             if user_input.lower() == '/clear-user':
@@ -86,15 +117,27 @@ def main():
                 print("\n🤖 Available Commands:")
                 print("  /new-session    - Start completely fresh session (clears everything)")
                 print("  /session-info   - Show current session details")
+                print("  /rate-limit     - Check rate limit status")
                 print("  /clear-user     - Clear user info only (keep chat history)")
                 print("  /clear-history  - Clear chat history only (keep user info)")
                 print("  /memory         - Show what's currently stored")
                 print("  /help           - Show this help message")
                 print("  exit/quit       - Exit the program")
-                print("\n💡 Use /new-session to simulate starting a fresh conversation!")
+                print("\n💡 Use /new-session to start fresh with a new 50-message limit!")
                 continue
             
             if not user_input:
+                continue
+            
+            # Check rate limit before processing
+            limit_check = rate_limiter.check_limit(session_id)
+            if not limit_check['allowed']:
+                print(f"\n❌ Rate limit exceeded!")
+                print(f"   You've used all {limit_check['limit']} messages for this session.")
+                if limit_check['reset_time']:
+                    print(f"   Limit resets at: {limit_check['reset_time'].strftime('%Y-%m-%d %H:%M:%S')}")
+                    print(f"   Time until reset: {limit_check['time_until_reset']}")
+                print("   Use /new-session to start a fresh session with a new limit.")
                 continue
             
             # Classify the user's intent
@@ -106,6 +149,14 @@ def main():
             # Add conversation to memory
             if response:
                 memory_manager.add_message(user_input, response)
+                
+                # Increment rate limit counter
+                rate_limiter.increment_count(session_id)
+                
+                # Show remaining messages
+                stats = rate_limiter.get_session_stats(session_id)
+                if stats['remaining'] <= 5:
+                    print(f"\n⚠️  Warning: Only {stats['remaining']} messages remaining in this session.")
                 
         except KeyboardInterrupt:
             print("\n\nGoodbye! Best of luck with your career journey.")
