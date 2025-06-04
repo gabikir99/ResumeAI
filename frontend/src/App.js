@@ -384,7 +384,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
     }
   }, [showChat]);
 
-  // Streaming text effect
+  // Streaming text effect (now used for UI display only)
   const streamText = (text, callback) => {
     setStreamingMessage('');
     setIsTyping(true);
@@ -442,9 +442,25 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
     setInputMessage('');
     setIsTyping(true);
     setConnectionError(false);
+    
+    // Create a placeholder for the AI response that will be updated as text streams in
+    const aiResponseId = Date.now() + 1;
+    const aiResponseTime = formatTime();
+    setStreamingMessage('');
+    
+    // Add an empty AI message that will be updated with streaming content
+    setMessages((prev) => [
+      ...prev, 
+      {
+        id: aiResponseId,
+        text: '',
+        sender: 'ai',
+        time: aiResponseTime,
+        isStreaming: true
+      }
+    ]);
 
     try {
-      let aiText = '';
       let newSession = sessionId;
 
       if (selectedFile) {
@@ -464,8 +480,20 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
         }
 
         const data = await response.json();
-        aiText = data.response || 'File uploaded successfully, but no response received.';
+        const aiText = data.response || 'File uploaded successfully, but no response received.';
         newSession = data.session_id || newSession;
+        
+        // Update the streaming message with the complete response
+        setStreamingMessage(aiText);
+        
+        // Update the AI message with the complete text
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === aiResponseId 
+              ? { ...msg, text: aiText, isStreaming: false } 
+              : msg
+          )
+        );
         
         // Clear file input after successful upload
         fileInputRef.current.value = '';
@@ -489,21 +517,32 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
         }
 
         const data = await response.json();
-        aiText = data.response || 'Message sent successfully, but no response received.';
+        const aiText = data.response || 'Message sent successfully, but no response received.';
         newSession = data.session_id || newSession;
+        
+        // Simulate streaming for the response
+        let streamedText = '';
+        const words = aiText.split(' ');
+        
+        for (let i = 0; i < words.length; i++) {
+          await new Promise(resolve => setTimeout(resolve, 30)); // Adjust speed as needed
+          streamedText += (i > 0 ? ' ' : '') + words[i];
+          setStreamingMessage(streamedText);
+          
+          // Update the message in the messages array
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === aiResponseId 
+                ? { ...msg, text: streamedText, isStreaming: i < words.length - 1 } 
+                : msg
+            )
+          );
+        }
       }
 
       if (newSession && newSession !== sessionId) {
         setSessionId(newSession);
       }
-
-      const aiResponse = {
-        id: Date.now() + 1,
-        text: aiText,
-        sender: 'ai',
-        time: formatTime(),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
       
     } catch (error) {
       console.error('Error in handleSendMessage:', error);
@@ -521,16 +560,22 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
         errorMessage += `Error: ${error.message}`;
       }
       
-      const aiResponse = {
-        id: Date.now() + 1,
-        text: errorMessage,
-        sender: 'ai',
-        time: formatTime(),
-        isError: true,
-      };
-      setMessages((prev) => [...prev, aiResponse]);
+      // Update the existing AI message with the error
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === aiResponseId 
+            ? { 
+                ...msg, 
+                text: errorMessage, 
+                isStreaming: false,
+                isError: true 
+              } 
+            : msg
+        )
+      );
     } finally {
       setIsTyping(false);
+      setStreamingMessage('');
     }
   };
 
@@ -644,28 +689,15 @@ const LandingPage = ({ user, onSendMessage, onFileUpload }) => {
                           </div>
                         )}
                       </div>
-                      <div className="message-time">{message.time}</div>
+                      <div className="message-time">
+                        {message.time}
+                        {message.isStreaming && (
+                          <span className="streaming-indicator"> ...</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
-                {isTyping && (
-                  <div className="message ai-message">
-                    <div className="message-avatar">🤖</div>
-                    <div className="typing-indicator">
-                      {streamingMessage ? (
-                        <div className="message-content">
-                          <MarkdownRenderer text={streamingMessage} />
-                        </div>
-                      ) : (
-                        <div className="typing-dots">
-                          <div className="typing-dot"></div>
-                          <div className="typing-dot"></div>
-                          <div className="typing-dot"></div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </>
             )}
             <div ref={messagesEndRef} />
