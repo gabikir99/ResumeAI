@@ -8,6 +8,34 @@ class GPTService:
         """Initialize the GPT service with OpenAI client."""
         self.client = client
         self.system_prompt = get_system_prompt()
+
+    def generate_streaming_response(self, intent_info, memory_manager, user_input):
+     print("→ Generating streaming response for input:", user_input)
+
+     messages = [
+        {"role": "system", "content": "You are a helpful resume assistant."},
+        {"role": "user", "content": user_input}
+     ]
+
+     try:
+        stream = self.client.chat.completions.create(
+            model="gpt-4",
+            messages=messages,
+            stream=True
+        )
+
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                print("→ Chunk received:", repr(content), flush=True)
+                yield content
+            else:
+                print("→ Chunk with no content:", chunk)
+
+     except Exception as e:
+        print("→ Streaming error:", e, flush=True)
+        yield f"\n[Error generating response: {str(e)}]"
+
     
     def _create_messages(self, content, is_website=True, user_info=None, chat_history=None):
         """Create message format for GPT API."""
