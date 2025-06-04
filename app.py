@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, Response, stream_with_context, jsonify
 from dotenv import load_dotenv
 from openai import OpenAI
 import os
@@ -100,9 +100,8 @@ def handle_intent(intent_info, memory_manager, original_input):
     else:
         return "I'm not sure I understood that. Could you please rephrase your question about careers or resumes?"
 
-@app.route('/api/chat', methods=['POST'])
-def chat():
-    """API endpoint for chat interactions."""
+@app.route('/api/chat-stream', methods=['POST'])
+def chat_stream():
     data = request.json
     user_input = data.get('message', '')
     session_id = data.get('session_id', None)
@@ -112,26 +111,27 @@ def chat():
     
     # Get or create memory manager for this session
     memory_manager, session_id = get_memory_manager(session_id)
+
+    @stream_with_context
+    def generate():
+        try:
+            intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
+            full_response = ""
+
+            for chunk in gpt_service.generate_streaming_response(intent_info, memory_manager, user_input):
+                full_response += chunk
+                yield chunk
+
+         
+            memory_manager.add_message(user_input, full_response)
+
+        except Exception as e:
+            yield f"[Error: {str(e)}]"
+
+  
+    return Response(generate(), mimetype='text/plain')
     
-    try:
-        # Classify the user's intent
-        intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
-        
-        # Handle the intent
-        response = handle_intent(intent_info, memory_manager, user_input)
-        
-        # Add conversation to memory
-        if response:
-            memory_manager.add_message(user_input, response)
-        
-        return jsonify({
-            'response': response,
-            'session_id': session_id,
-            'user_info': memory_manager.get_user_info()
-        })
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+   
 
 @app.route('/api/session', methods=['POST'])
 def manage_session():
