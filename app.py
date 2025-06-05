@@ -140,6 +140,15 @@ def handle_intent(intent_info, memory_manager, original_input):
     elif intent == 'handle_rejection':
         return response_handlers.handle_rejection(args['rejection'], memory_manager.get_user_info())
         
+    elif intent == 'rewrite_resume_section':
+        section = args['section']
+        prompt = f"Please rewrite the {section} section of my resume to make it more effective."
+        return gpt_service.chat_about_resumes(
+            prompt,
+            memory_manager.get_user_info(),
+            memory_manager.get_chat_history()
+        )
+        
     elif intent == 'store_personal_info':
         # Store the personal information
         info_type = args['info_type']
@@ -190,7 +199,12 @@ def chat_stream():
             intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
             full_response = ""
 
-            for chunk in gpt_service.generate_streaming_response(intent_info, memory_manager, user_input):
+            # Process the intent and generate response
+            response = handle_intent(intent_info, memory_manager, user_input)
+            
+            # Stream the response
+            for chunk in response.split(' '):
+                chunk += ' '
                 full_response += chunk
                 yield chunk
 
