@@ -174,10 +174,6 @@ def chat_stream():
     @stream_with_context
     def generate():
         try:
-            # Add rate limit info to the first chunk
-            limit_status = rate_limiter.get_session_stats(session_id)
-            yield f"[RATE_LIMIT_INFO:{limit_status['remaining']-1}/{limit_status['limit']}]\n"
-            
             intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
             full_response = ""
 
