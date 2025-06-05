@@ -62,7 +62,7 @@ def test_rate_limit_terminal():
     
     # Wait a short time and try again
     print("\n3. Waiting 5 seconds and trying again...")
-    time.sleep(5)
+    time.sleep(10)
     
     check_result = rate_limiter.check_limit(session_id)
     if not check_result['allowed']:
