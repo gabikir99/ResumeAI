@@ -19,9 +19,9 @@ api_key = os.getenv("OPENAI_API_KEY")
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Initialize in-memory rate limiter (5 messages per 3 hours for testing)
+# Initialize in-memory rate limiter (50 messages per 3 hours)
 rate_limiter = InMemoryRateLimiter(
-    message_limit=5,
+    message_limit=50,
     reset_period_hours=3
 )
 
@@ -473,7 +473,7 @@ def health_check():
         'api_key_configured': bool(api_key),
         'rate_limiter': 'in-memory',
         'rate_limit_config': {
-            'message_limit': 5,
+            'message_limit': 50,
             'reset_period_hours': 3
         }
     })
