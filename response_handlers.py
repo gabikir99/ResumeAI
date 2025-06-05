@@ -54,3 +54,9 @@ class ResponseHandlers:
         
         response = random.choice(responses)
         return response
+    
+    def handle_confirmation(self, confirmation, user_info=None):
+        return "Great! Making those changes now."  # or customize based on flow
+    
+    def handle_rejection(self, rejection, user_info=None):
+        return "No problem at all. Let me know if you need help later!"

@@ -1,5 +1,6 @@
 import re
 from utils import is_valid_url
+import json 
 
 # Flexible and adaptive system prompt
 SYSTEM_PROMPT = """
@@ -154,7 +155,41 @@ INTENT_FUNCTIONS = [
             },
             "required": ["off_topic_query"]
         }
+    },
+    {
+    "name": "handle_confirmation",
+    "description": "Handle user confirmations like 'yes', 'yeah', 'sure', etc.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "confirmation": {"type": "string", "description": "The confirmation text"}
+        },
+        "required": ["confirmation"]
     }
+    },
+    {
+        "name": "handle_rejection",
+        "description": "Handle user rejections like 'no', 'not interested', etc.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "rejection": {"type": "string", "description": "The rejection text"}
+            },
+            "required": ["rejection"]
+        }
+    },
+    {
+    "name": "rewrite_resume_section",
+    "description": "Rewrite or regenerate a specific resume section",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "section": {"type": "string", "description": "Which section to rewrite"}
+        },
+        "required": ["section"]
+    }
+    }
+
 ]
 
 class IntentClassifier:
@@ -226,7 +261,7 @@ class IntentClassifier:
         
         if response.choices[0].message.function_call:
             function_name = response.choices[0].message.function_call.name
-            function_args = eval(response.choices[0].message.function_call.arguments)
+            function_args = json.loads(response.choices[0].message.function_call.arguments)
             
             return {
                 'intent': function_name,
@@ -248,7 +283,7 @@ class IntentClassifier:
             (r'(?:hello|hi|hey)?\s*i am ([a-zA-Z\s]+)', 'name'),
             (r'(?:hello|hi|hey)?\s*i\'m ([a-zA-Z\s]+)', 'name'),
             (r'i have (\d+) years? of experience(?:\s+in\s+(.+))?', 'experience'),
-            (r'i work as a?n? (.+)', 'current_role'),
+            (r'\bi work as (?:a|an)?\s*([a-zA-Z\s]+)', 'current_role'),
             (r'i want to (?:work in|create|build|create a resume for) (.+)', 'career_interest'),
             (r'looking for (.+) (?:job|position|role)', 'career_interest'),
             (r'create (?:a )?resume for (.+)', 'career_interest'),
@@ -272,7 +307,7 @@ class IntentClassifier:
         
         # Check for greetings (only if no personal info was found)
         greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']
-        if any(greeting in user_input_lower for greeting in greetings):
+        if any(re.search(rf'\b{greeting}\b', user_input_lower) for greeting in greetings):
             return {'intent': 'handle_greeting', 'args': {'greeting': user_input}}
         
         # Check for farewells
@@ -303,14 +338,37 @@ class IntentClassifier:
         
         # Check for job description (long text with job-related keywords)
         job_indicators = ['job description', 'responsibilities', 'requirements', 'qualifications']
-        if len(user_input.split()) > 50 and any(indicator in user_input_lower for indicator in job_indicators):
+        if len(user_input.split()) > 50 and any(word in user_input_lower for word in ['responsibilities', 'duties', 'qualifications']):
             return {'intent': 'process_job_description', 'args': {'job_description': user_input}}
-        
+
         # Check for completely off-topic (non-career) requests
         off_topic_keywords = ['weather', 'sports', 'cooking', 'movie', 'music', 'game', 'food', 'travel']
         if any(keyword in user_input_lower for keyword in off_topic_keywords):
             return {'intent': 'handle_off_topic', 'args': {'off_topic_query': user_input}}
         
+        confirmations = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'of course', 'please do', 'go ahead']
+        if user_input_lower.strip() in confirmations:
+            return {'intent': 'handle_confirmation', 'args': {'confirmation': user_input}}
+
+        rejections = ['no', 'not interested', 'no thanks', 'nope', 'not really', 'not at this time']
+        if user_input_lower.strip() in rejections:
+            return {'intent': 'handle_rejection', 'args': {'rejection': user_input}}
+        
+        resume_rewrite_keywords = ['redo', 'remake', 'rewrite', 'revise', 'change', 'edit']
+        resume_sections = ['summary', 'objective', 'experience', 'skills', 'education', 'projects', 'achievements']
+
+        for keyword in resume_rewrite_keywords:
+            for section in resume_sections:
+                if keyword in user_input_lower and section in user_input_lower:
+                    return {
+                        'intent': 'rewrite_resume_section',
+                        'args': {'section': section}
+                    }
+        
+        if any(word in user_input_lower for word in resume_rewrite_keywords):
+            return {'intent': 'answer_career_question', 'args': {'question': user_input}}
+
+
         # Default to career question (assume career-related unless clearly off-topic)
         return {'intent': 'answer_career_question', 'args': {'question': user_input}}
 

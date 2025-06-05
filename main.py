@@ -180,6 +180,18 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
         print("\n", end="")
         print_streaming(response)
         return response
+    
+    elif intent == 'handle_confirmation':
+        response = "Great! Making those changes now."
+        print("\n", end="")
+        print_streaming(response)
+        return response
+
+    elif intent == 'handle_rejection':
+        response = "No worries! Let me know if you'd like help later."
+        print("\n", end="")
+        print_streaming(response)
+        return response
         
     elif intent == 'process_job_url':
         print("\n", end="")

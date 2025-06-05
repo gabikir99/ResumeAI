@@ -133,6 +133,12 @@ def handle_intent(intent_info, memory_manager, original_input):
             memory_manager.get_user_info(), 
             memory_manager.get_chat_history()
         )
+    
+    elif intent == 'handle_confirmation':
+        return response_handlers.handle_confirmation(args['confirmation'], memory_manager.get_user_info())
+    
+    elif intent == 'handle_rejection':
+        return response_handlers.handle_rejection(args['rejection'], memory_manager.get_user_info())
         
     elif intent == 'store_personal_info':
         # Store the personal information
