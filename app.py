@@ -174,6 +174,13 @@ def chat_stream():
     @stream_with_context
     def generate():
         try:
+            # Check if user has reached message limit
+            limit_status = rate_limiter.get_session_stats(session_id)
+            if not limit_status['allowed']:
+                reset_time = limit_status['reset_time'].strftime('%Y-%m-%d %H:%M:%S')
+                yield f"You've reached the limit of {limit_status['limit']} messages. Please wait until {reset_time} for your limit to reset, or start a new session."
+                return
+                
             intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
             full_response = ""
 
