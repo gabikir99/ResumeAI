@@ -4,10 +4,11 @@ from user_intent import get_system_prompt
 class GPTService:
     """Service class to handle all GPT-related operations."""
     
-    def __init__(self, client):
+    def __init__(self, client, response_handlers=None):
         """Initialize the GPT service with OpenAI client."""
         self.client = client
         self.system_prompt = get_system_prompt()
+        self.response_handlers = response_handlers
 
     def generate_streaming_response(self, intent_info, memory_manager, user_input):
         """Generate a streaming response based on the intent."""
@@ -22,16 +23,16 @@ class GPTService:
         
         # Create appropriate messages based on intent
         if intent == 'handle_greeting':
-            return response_handlers.handle_greeting(args['greeting'], user_info)
+            return self.response_handlers.handle_greeting(args['greeting'], user_info)
             
         elif intent == 'handle_goodbye':
-            return response_handlers.handle_goodbye(args['farewell'], user_info)
+            return self.response_handlers.handle_goodbye(args['farewell'], user_info)
             
         elif intent == 'handle_confirmation':
-            return response_handlers.handle_confirmation(args['confirmation'], user_info)
+            return self.response_handlers.handle_confirmation(args['confirmation'], user_info)
             
         elif intent == 'handle_rejection':
-            return response_handlers.handle_rejection(args['rejection'], user_info)
+            return self.response_handlers.handle_rejection(args['rejection'], user_info)
             
         elif intent == 'process_job_url':
             return self.generate_resume_sections(args['url'], user_info, chat_history)

@@ -27,8 +27,8 @@ rate_limiter = InMemoryRateLimiter(
 
 # Initialize services
 client = OpenAI(api_key=api_key)
-gpt_service = GPTService(client)
 response_handlers = ResponseHandlers()
+gpt_service = GPTService(client, response_handlers)
 intent_classifier = IntentClassifier(client)
 pdf_processor = PDFProcessor()
 
