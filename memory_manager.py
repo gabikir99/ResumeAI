@@ -5,7 +5,7 @@ from datetime import datetime
 class MemoryManager:
     """Manages conversation memory with session control."""
     
-    def __init__(self, k=15, session_id=None):
+    def __init__(self, k=30, session_id=None):
         """Initialize memory manager with window size k and optional session ID."""
         self.k = k
         self.session_id = session_id or str(uuid.uuid4())
