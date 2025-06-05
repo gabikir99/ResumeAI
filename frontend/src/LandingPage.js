@@ -58,6 +58,8 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [rateLimitInfo, setRateLimitInfo] = useState({ remaining: 50, total: 50 });
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -219,7 +221,20 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
+          if (chunk.includes('[RATE_LIMIT_INFO:')) {
+            const match = chunk.match(/\[RATE_LIMIT_INFO:(\d+)\/(\d+)\]/);
+            if (match) {
+              const remaining = parseInt(match[1]); 
+              const total = parseInt(match[2]); 
+              setRateLimitInfo({ remaining, total }); 
+            }
+            continue; 
+
+          }
           fullResponse += chunk;
+
+          // alert(rateLimitInfo.remaining);
+
 
           
           setMessages(prev =>
@@ -323,6 +338,8 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
               <div className="chat-avatar">🤖</div>
               <div>
                 <h2 className="chat-title">AI Resume Assistant</h2>
+                <p style={{color: 'lightgreen', fontWeight: '600'}}>Remaining free chats left: {rateLimitInfo.remaining}/{rateLimitInfo.total}</p>
+                
                 <p className="chat-subtitle">
                   {connectionError ? (
                     <span style={{ color: '#ff6b6b' }}>
