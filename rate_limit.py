@@ -31,7 +31,8 @@ class InMemoryRateLimiter:
                 'current_count': int,
                 'limit': int,
                 'reset_time': datetime or None,
-                'remaining': int
+                'remaining': int,
+                'time_until_reset': str (only if reset_time is not None)
             }
         """
         with self.lock:
@@ -63,12 +64,16 @@ class InMemoryRateLimiter:
             allowed = current_count < self.message_limit
             remaining = max(0, self.message_limit - current_count)
             
+            # Calculate time until reset
+            time_until_reset = reset_time - datetime.now()
+            
             return {
                 'allowed': allowed,
                 'current_count': current_count,
                 'limit': self.message_limit,
                 'reset_time': reset_time,
-                'remaining': remaining
+                'remaining': remaining,
+                'time_until_reset': str(time_until_reset).split('.')[0]
             }
     
     def increment_count(self, session_id):

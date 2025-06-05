@@ -69,7 +69,9 @@ def test_rate_limit_terminal():
         print("✅ Still rate limited as expected!")
         print(f"Status: {check_result['current_count']}/{check_result['limit']} messages used")
         print(f"Reset time: {check_result['reset_time'].strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"Time until reset: {check_result['time_until_reset']}")
+        # Calculate time until reset
+        time_until_reset = check_result['reset_time'] - datetime.now()
+        print(f"Time until reset: {str(time_until_reset).split('.')[0]}")
     else:
         print("❌ Test failed: Rate limit should still be in effect!")
     
