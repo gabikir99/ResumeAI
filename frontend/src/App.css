@@ -620,6 +620,7 @@ body {
 }
 
 .registration-modal {
+  position: relative;
   width: 100%;
   max-width: 450px;
   background-color: white;
@@ -634,9 +635,65 @@ body {
   align-items: center;
   justify-content: center;
 }
+.auth-buttons {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  display: flex;
+  gap: 1rem;
+  z-index: 100;
+  flex-wrap: wrap;
+  
+}
+.login {
+  border: none !important;
+}
+.auth-btn {
+  padding: 10px 20px;
+  border: 2px solid #ffff;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  background: transparent;
+  color: #ffff;
+}
+
+.auth-btn:hover {
+  transform: scale(1.05);
+  background-color: #007bff;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+}
+.auth-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+.auth-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.3);
+}
+
+@media (max-width: 500px) {
+  .auth-buttons {
+    flex-direction: column;
+    top: 0.5rem;
+    left: 0.5rem;
+  }
+
+  .auth-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
+}
 
 /* Modal styling */
 .login-modal {
+  position: relative;
   background: #fff;
   padding: 2.5rem 2rem;
   border-radius: 1.2rem;
@@ -765,7 +822,34 @@ body {
   flex-direction: column;
   gap: 1.25rem;
 }
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.close-btn {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #333;
+  cursor: pointer;
+  z-index: 10;
+}
 
+.modal-close-btn:hover {
+  color: #6B46C1;
+}
 .form-group {
   display: flex;
   flex-direction: column;
