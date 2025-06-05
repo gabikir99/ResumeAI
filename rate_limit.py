@@ -15,7 +15,7 @@ class InMemoryRateLimiter:
             reset_period_hours: Hours before the counter resets (default: 24)
         """
         self.message_limit = 5  # Set to 5 messages for testing
-        self.reset_period = timedelta(hours=3)  # Set to 3 hours for testing
+        self.reset_period = timedelta(hours=1)  # Set to 1 hour for testing
         
         # In-memory storage
         self.sessions = {}  # {session_id: {'count': int, 'first_message': datetime}}
