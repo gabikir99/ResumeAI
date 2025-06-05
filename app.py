@@ -8,6 +8,8 @@ from user_intent import IntentClassifier
 from memory_manager import MemoryManager
 from pdf_processor import PDFProcessor
 from flask_cors import CORS
+from rate_limit import InMemoryRateLimiter
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
@@ -16,6 +18,12 @@ api_key = os.getenv("OPENAI_API_KEY")
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Initialize in-memory rate limiter (50 messages per 24 hours)
+rate_limiter = InMemoryRateLimiter(
+    message_limit=50,
+    reset_period_hours=24
+)
 
 # Initialize services
 client = OpenAI(api_key=api_key)
@@ -26,6 +34,56 @@ pdf_processor = PDFProcessor()
 
 # Dictionary to store memory managers for different sessions
 session_memories = {}
+
+def rate_limit_check(f):
+    """
+    Decorator to check rate limits before processing requests.
+    """
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        # Get session_id from request
+        data = request.get_json() or {}
+        session_id = data.get('session_id')
+        
+        # For file uploads, get from form data
+        if not session_id and request.form:
+            session_id = request.form.get('session_id')
+        
+        if not session_id:
+            # If no session_id, proceed without rate limiting
+            return f(*args, **kwargs)
+        
+        # Check rate limit
+        limit_status = rate_limiter.check_limit(session_id)
+        
+        if not limit_status['allowed']:
+            return jsonify({
+                'error': 'Message limit reached',
+                'limit': limit_status['limit'],
+                'current_count': limit_status['current_count'],
+                'reset_time': limit_status['reset_time'].isoformat() if limit_status['reset_time'] else None,
+                'message': f"You've reached the limit of {limit_status['limit']} messages. "
+                          f"Please wait until {limit_status['reset_time'].strftime('%Y-%m-%d %H:%M:%S')} "
+                          "or start a new session."
+            }), 429  # 429 Too Many Requests
+        
+        # Call the original function
+        result = f(*args, **kwargs)
+        
+        # Increment counter after successful processing
+        rate_limiter.increment_count(session_id)
+        
+        # Add rate limit headers to response
+        if isinstance(result, Response):
+            result.headers['X-RateLimit-Limit'] = str(limit_status['limit'])
+            result.headers['X-RateLimit-Remaining'] = str(limit_status['remaining'] - 1)
+            result.headers['X-RateLimit-Used'] = str(limit_status['current_count'] + 1)
+            if limit_status['reset_time']:
+                result.headers['X-RateLimit-Reset'] = str(int(limit_status['reset_time'].timestamp()))
+        
+        return result
+    
+    return wrapper
 
 def get_memory_manager(session_id=None):
     """Get or create a memory manager for the given session ID."""
@@ -101,6 +159,7 @@ def handle_intent(intent_info, memory_manager, original_input):
         return "I'm not sure I understood that. Could you please rephrase your question about careers or resumes?"
 
 @app.route('/api/chat-stream', methods=['POST'])
+@rate_limit_check
 def chat_stream():
     data = request.json
     user_input = data.get('message', '')
@@ -115,6 +174,10 @@ def chat_stream():
     @stream_with_context
     def generate():
         try:
+            # Add rate limit info to the first chunk
+            limit_status = rate_limiter.get_session_stats(session_id)
+            yield f"[RATE_LIMIT_INFO:{limit_status['remaining']-1}/{limit_status['limit']}]\n"
+            
             intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
             full_response = ""
 
@@ -122,16 +185,53 @@ def chat_stream():
                 full_response += chunk
                 yield chunk
 
-         
             memory_manager.add_message(user_input, full_response)
 
         except Exception as e:
             yield f"[Error: {str(e)}]"
 
-  
     return Response(generate(), mimetype='text/plain')
+
+@app.route('/api/rate-limit/status', methods=['GET'])
+def rate_limit_status():
+    """Get rate limit status for a session."""
+    session_id = request.args.get('session_id')
     
-   
+    if not session_id:
+        return jsonify({'error': 'No session_id provided'}), 400
+    
+    stats = rate_limiter.get_session_stats(session_id)
+    
+    return jsonify({
+        'session_id': session_id,
+        'messages_used': stats['current_count'],
+        'messages_limit': stats['limit'],
+        'messages_remaining': stats['remaining'],
+        'reset_time': stats['reset_time'].isoformat() if stats['reset_time'] else None,
+        'time_until_reset': stats['time_until_reset']
+    })
+
+@app.route('/api/rate-limit/reset', methods=['POST'])
+def rate_limit_reset():
+    """Reset rate limit for a session (admin endpoint)."""
+    # Add authentication here in production
+    data = request.json
+    session_id = data.get('session_id')
+    admin_key = data.get('admin_key')
+    
+    # Simple admin key check (use proper authentication in production)
+    if admin_key != os.getenv('ADMIN_KEY', 'your-secret-admin-key'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    if not session_id:
+        return jsonify({'error': 'No session_id provided'}), 400
+    
+    rate_limiter.reset_session(session_id)
+    
+    return jsonify({
+        'message': 'Rate limit reset successfully',
+        'session_id': session_id
+    })
 
 @app.route('/api/session', methods=['POST'])
 def manage_session():
@@ -147,16 +247,35 @@ def manage_session():
         memory_manager = MemoryManager()
         session_id = memory_manager.session_id
         session_memories[session_id] = memory_manager
-        return jsonify({'session_id': session_id, 'message': 'New session created'})
+        
+        # Get initial rate limit status
+        limit_status = rate_limiter.get_session_stats(session_id)
+        
+        return jsonify({
+            'session_id': session_id,
+            'message': 'New session created',
+            'rate_limit': {
+                'messages_remaining': limit_status['remaining'],
+                'messages_limit': limit_status['limit']
+            }
+        })
     
     elif action == 'info':
         # Get session info
         info = memory_manager.get_session_info()
+        limit_status = rate_limiter.get_session_stats(session_id)
+        
         return jsonify({
             'session_id': info['session_id'],
             'start_time': info['start_time'].isoformat(),
             'user_info_count': info['user_info_count'],
-            'chat_history_length': info['chat_history_length']
+            'chat_history_length': info['chat_history_length'],
+            'rate_limit': {
+                'messages_used': limit_status['current_count'],
+                'messages_remaining': limit_status['remaining'],
+                'messages_limit': limit_status['limit'],
+                'reset_time': limit_status['reset_time'].isoformat() if limit_status['reset_time'] else None
+            }
         })
     
     elif action == 'clear_user':
@@ -172,12 +291,18 @@ def manage_session():
     elif action == 'export':
         # Export session data
         data = memory_manager.export_session_data()
+        limit_status = rate_limiter.get_session_stats(session_id)
+        data['rate_limit'] = {
+            'messages_used': limit_status['current_count'],
+            'messages_limit': limit_status['limit']
+        }
         return jsonify(data)
     
     else:
         return jsonify({'error': 'Invalid action'}), 400
 
 @app.route('/api/upload', methods=['POST'])
+@rate_limit_check
 def upload_file():
     """API endpoint for file uploads."""
     if 'file' not in request.files:
@@ -222,12 +347,19 @@ def upload_file():
             # Add to memory
             memory_manager.add_message(f"{message_prefix}: {file.filename}", response)
             
+            # Get rate limit status
+            limit_status = rate_limiter.get_session_stats(session_id)
+            
             return jsonify({
                 'response': response,
                 'session_id': session_id,
                 'filename': file.filename,
                 'document_type': doc_type,
-                'extracted_text_length': len(extracted_text)
+                'extracted_text_length': len(extracted_text),
+                'rate_limit': {
+                    'messages_remaining': limit_status['remaining'] - 1,
+                    'messages_limit': limit_status['limit']
+                }
             })
         else:
             # Handle text files as before
@@ -247,16 +379,24 @@ def upload_file():
             # Add to memory
             memory_manager.add_message(f"[Uploaded file: {file.filename}]", response)
             
+            # Get rate limit status
+            limit_status = rate_limiter.get_session_stats(session_id)
+            
             return jsonify({
                 'response': response,
                 'session_id': session_id,
-                'filename': file.filename
+                'filename': file.filename,
+                'rate_limit': {
+                    'messages_remaining': limit_status['remaining'] - 1,
+                    'messages_limit': limit_status['limit']
+                }
             })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/upload/pdf', methods=['POST'])
+@rate_limit_check
 def upload_pdf():
     """API endpoint specifically for PDF uploads."""
     if 'file' not in request.files:
@@ -304,12 +444,19 @@ def upload_pdf():
             response
         )
         
+        # Get rate limit status
+        limit_status = rate_limiter.get_session_stats(session_id)
+        
         return jsonify({
             'response': response,
             'session_id': session_id,
             'filename': file.filename,
             'document_type': doc_type,
-            'extracted_text_preview': extracted_text[:200] + "..." if len(extracted_text) > 200 else extracted_text
+            'extracted_text_preview': extracted_text[:200] + "..." if len(extracted_text) > 200 else extracted_text,
+            'rate_limit': {
+                'messages_remaining': limit_status['remaining'] - 1,
+                'messages_limit': limit_status['limit']
+            }
         })
     
     except Exception as e:
@@ -318,7 +465,31 @@ def upload_pdf():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
-    return jsonify({'status': 'ok', 'api_key_configured': bool(api_key)})
+    return jsonify({
+        'status': 'ok',
+        'api_key_configured': bool(api_key),
+        'rate_limiter': 'in-memory',
+        'rate_limit_config': {
+            'message_limit': 50,
+            'reset_period_hours': 24
+        }
+    })
+
+@app.route('/api/admin/sessions', methods=['GET'])
+def admin_get_sessions():
+    """Get all active sessions (admin endpoint)."""
+    # Add authentication here in production
+    admin_key = request.headers.get('X-Admin-Key')
+    
+    if admin_key != os.getenv('ADMIN_KEY', 'your-secret-admin-key'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    sessions = rate_limiter.get_all_active_sessions()
+    
+    return jsonify({
+        'active_sessions': sessions,
+        'total_sessions': len(sessions)
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
