@@ -2,6 +2,10 @@ from flask import Flask, request, Response, stream_with_context, jsonify
 from dotenv import load_dotenv
 from openai import OpenAI
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 from gpt_service import GPTService
 from response_handlers import ResponseHandlers
 from user_intent import IntentClassifier
@@ -420,6 +424,65 @@ def admin_get_sessions():
         'active_sessions': sessions,
         'total_sessions': len(sessions)
     })
+
+@app.route('/api/feedback', methods=['POST'])
+def submit_feedback():
+    """API endpoint for submitting anonymous feedback."""
+    data = request.json
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    feedback_text = data.get('feedback', '')
+    
+    if not feedback_text or len(feedback_text.strip()) == 0:
+        return jsonify({'error': 'Feedback cannot be empty'}), 400
+    
+    # Get email configuration from environment variables
+    smtp_server = os.getenv("SMTP_SERVER")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username = os.getenv("SMTP_USERNAME")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    recipient_email = os.getenv("ADMIN_EMAIL")
+    
+    if not all([smtp_server, smtp_port, smtp_username, smtp_password, recipient_email]):
+        return jsonify({'error': 'Email configuration incomplete'}), 500
+    
+    try:
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = smtp_username
+        msg['To'] = recipient_email
+        msg['Subject'] = f"Anonymous Feedback - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        # Email body
+        body = f"""
+        New anonymous feedback has been received:
+        
+        Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        
+        Feedback:
+        {feedback_text}
+        
+        This is an automated notification.
+        """
+        
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Connect to server and send email
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_username, smtp_password)
+        server.send_message(msg)
+        server.quit()
+        
+        return jsonify({
+            'message': 'Thank you for your feedback!',
+            'success': True
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to send feedback: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
