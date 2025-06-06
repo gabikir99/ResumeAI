@@ -19,7 +19,7 @@ def main():
         return
     
     # Initialize in-memory rate limiter (50 messages per 24 hours)
-    rate_limiter = InMemoryRateLimiter(message_limit=50, reset_period_hours=24)
+    rate_limiter = InMemoryRateLimiter(message_limit=5, reset_period_hours=1)
     
     # Initialize services
     client = OpenAI(api_key=api_key)
@@ -28,7 +28,7 @@ def main():
     intent_classifier = IntentClassifier(client)
     
     # Initialize memory manager with session management
-    memory_manager = MemoryManager(k=15)
+    memory_manager = MemoryManager(k=30)
     session_id = memory_manager.session_id
     
     print("Welcome to your AI Career Assistant! How can I help you today?")
