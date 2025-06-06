@@ -31,7 +31,7 @@ const Login = ({ onSwitchToRegister, onLoginSuccess, onClose }) => {
       }
     } else {
       setError('No registered user found. Please sign up first.');
-      alert('No registered user found. Please sign up first.');
+    
     }
   }
 

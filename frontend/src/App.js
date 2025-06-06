@@ -20,12 +20,16 @@ const App = () => {
     setUser(userData);
     setShowLogin(false); 
   };
+  const handleLogout = () => {
+    setUser(null); 
+    sessionStorage.removeItem('registeredUser');
+  }; 
 
   // Show registration page if no user, otherwise show landing page
   if (!user) {
     return (
    <>
-    <LandingPage onClickLogin={() => setShowLogin(true)} onClickSignup={() => setShowRegistration(true)} />
+    <LandingPage user={user} onClickLogin={() => setShowLogin(true)} onClickSignup={() => setShowRegistration(true)} />
 
       {showLogin && (
         <Login onClose={() => setShowLogin(false)}
@@ -47,7 +51,7 @@ const App = () => {
    </>
    );
   };
-  return <LandingPage user={user} />;
+  return <LandingPage user={user} onLogout={handleLogout} />;
 };
 
 export default App;

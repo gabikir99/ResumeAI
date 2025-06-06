@@ -46,7 +46,7 @@ const MarkdownRenderer = ({ text }) => {
   );
 };
 // Landing Page Component
-const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickSignup }) => {
+const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickSignup, onLogout }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -54,6 +54,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [userName, setUserName] = useState('');
   const [connectionError, setConnectionError] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -137,6 +138,8 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
       sessionStorage.setItem('session_id', sessionId);
     }
   }, [sessionId]);
+
+
 
   // Test server connection when chat opens
   useEffect(() => {
@@ -338,7 +341,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
               <div className="chat-avatar">🤖</div>
               <div>
                 <h2 className="chat-title">AI Resume Assistant</h2>
-                <p style={{color: 'lightgreen', fontWeight: '600'}}>Remaining free chats left: {rateLimitInfo.remaining}/{rateLimitInfo.total}</p>
+                <p style={{color: 'lightgreen', fontWeight: '600'}}>Remaining free messages left: {rateLimitInfo.remaining}/{rateLimitInfo.total}</p>
                 
                 <p className="chat-subtitle">
                   {connectionError ? (
@@ -515,10 +518,26 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
       </div>
 
       <div className="main-content">
-        <div className='auth-buttons'>
-        <button className='auth-btn login' onClick={onClickLogin}>Login</button>
-        <button className='auth-btn' onClick={onClickSignup}>Sign up</button>
-        </div>
+      
+          {!user && ( 
+           <div className='auth-buttons'>
+             <button className='auth-btn login' onClick={onClickLogin}>Login</button>
+            <button className='auth-btn' onClick={onClickSignup}>Sign up</button>
+            </div>
+          )}
+          {user && (
+            <div className='auth-buttons'>
+              <button className='auth-btn' onClick={onLogout}>Sign Out</button>
+              </div>
+          )}
+
+         
+       
+       
+       
+        
+       
+        
        
         <div className="content-grid">
           {/* Left Content */}
