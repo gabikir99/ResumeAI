@@ -74,6 +74,20 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
       
       // Use sessionStorage instead of localStorage
       sessionStorage.setItem('registeredUser', JSON.stringify(userData));
+      try {
+  const res = await fetch('http://localhost:5000/api/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'new' })
+  });
+
+  const data = await res.json();
+  if (data.session_id) {
+    sessionStorage.setItem('session_id', data.session_id);
+  }
+} catch (e) {
+  console.error('Session creation failed:', e);
+}
       
       // Call success callback
       onSignupSuccess({

@@ -65,6 +65,18 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+ const fetchRateLimitInfo = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/api/rate-limit/status?session_id=${sessionId}`);
+    if (!res.ok) throw new Error('Failed to fetch rate limit status');
+    const data = await res.json();
+    console.log("✅ Rate limit data:", data); // <- ADD THIS LINE
+    setRateLimitInfo({ remaining: data.messages_remaining, total: data.messages_limit });
+  } catch (err) {
+    console.error('Error fetching rate limit status:', err);
+  }
+};
+
 
   useEffect(() => {
     scrollToBottom();
@@ -135,7 +147,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
 
   useEffect(() => {
     if (sessionId) {
-      sessionStorage.setItem('session_id', sessionId);
+      sessionStorage.getItem('session_id', sessionId);
     }
   }, [sessionId]);
 
@@ -217,38 +229,30 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
         // Handle streaming response
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+       
+
         let fullResponse = '';
+        let partial = '';
 
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
-          if (chunk.includes('[RATE_LIMIT_INFO:')) {
-            const match = chunk.match(/\[RATE_LIMIT_INFO:(\d+)\/(\d+)\]/);
-            if (match) {
-              const remaining = parseInt(match[1]); 
-              const total = parseInt(match[2]); 
-              setRateLimitInfo({ remaining, total }); 
-            }
-            continue; 
 
-          }
           fullResponse += chunk;
+          partial += chunk;
 
-          // alert(rateLimitInfo.remaining);
-
-
-          
+          // Update frontend with partial stream
           setMessages(prev =>
-            prev.map(msg =>
-              msg.id === aiResponseId 
-                ? { ...msg, text: fullResponse, isStreaming: true } 
-                : msg
-            )
-          );
-          console.log("Chunk:", chunk);
-        }
+          prev.map(msg =>
+          msg.id === aiResponseId 
+            ? { ...msg, text: partial, isStreaming: true } 
+            : msg
+    )
+  );
+}
+
 
         // Finalize the message
         setMessages(prev =>
@@ -258,6 +262,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
               : msg
           )
         );
+        await fetchRateLimitInfo();
 
       } else {
         // Fall back to regular API call
@@ -294,6 +299,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
               : msg
           )
         );
+        await fetchRateLimitInfo();
       }
 
     } catch (error) {
