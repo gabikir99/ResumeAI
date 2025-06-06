@@ -1,94 +1,65 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import sys
 import os
 
 # Add the parent directory to sys.path to import modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from rate_limit import InMemoryRateLimiter
 
 def test_rate_limit_terminal():
     """
-    Test the rate limit functionality in the terminal.
-    This script will:
-    1. Create a rate limiter with 5 messages per hour
-    2. Create a test session
-    3. Send messages until rate limit is reached
-    4. Display rate limit information
-    5. Wait a short time and try again to show it's still limited
+    Terminal test for InMemoryRateLimiter:
+    1. Creates a limiter with 5 messages/hour
+    2. Sends messages to trigger rate limiting
+    3. Verifies blocking behavior
+    4. Tests manual reset
     """
     print("=== Terminal Rate Limit Test ===")
-    print("Testing with 5 messages per hour limit")
-    
-    # Create rate limiter with 5 messages per hour
     rate_limiter = InMemoryRateLimiter(message_limit=5, reset_period_hours=1)
-    
-    # Create a test session
-    session_id = "test-session-" + datetime.now().strftime("%Y%m%d%H%M%S")
-    print(f"\n1. Created test session: {session_id}")
-    
-    # Check initial status
-    status = rate_limiter.get_session_stats(session_id)
-    print(f"Initial status: {status['remaining']}/{status['limit']} messages remaining")
-    
-    # Send messages until rate limit is reached
-    print("\n2. Sending messages until rate limit is reached...")
-    
-    for i in range(1, 8):  # Try to send 7 messages (2 over the limit)
-        print(f"\nAttempting to send message {i}...")
-        
-        # Check if allowed before sending
-        check_result = rate_limiter.check_limit(session_id)
-        
-        if check_result['allowed']:
-            # Simulate sending a message
+    session_id = f"test-session-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    print(f"\n[1] Created session: {session_id}")
+
+    def print_status():
+        status = rate_limiter.get_session_stats(session_id)
+        print(f"→ Used: {status['current_count']} / {status['limit']} | Remaining: {status['remaining']}")
+        if status['reset_time']:
+            print(f"→ Resets at: {status['reset_time'].strftime('%Y-%m-%d %H:%M:%S')}, In: {status['time_until_reset']}")
+
+    print_status()
+
+    print("\n[2] Sending messages...")
+    for i in range(1, 8):  # Try to send 7 messages
+        print(f"\nAttempt {i}:")
+        allowed = rate_limiter.check_limit(session_id)
+        if allowed['allowed']:
             rate_limiter.increment_count(session_id)
-            print(f"✅ Message {i} sent successfully")
-            
-            # Get updated status
-            status = rate_limiter.get_session_stats(session_id)
-            print(f"Status: {status['remaining']}/{status['limit']} messages remaining")
+            print(f"✅ Sent message {i}")
         else:
-            # Rate limit reached
-            print(f"❌ Rate limit reached after {i-1} messages!")
-            print(f"Status: {status['current_count']}/{status['limit']} messages used")
-            
-            if status['reset_time']:
-                print(f"Reset time: {status['reset_time'].strftime('%Y-%m-%d %H:%M:%S')}")
-                print(f"Time until reset: {status['time_until_reset']}")
-            
+            print(f"❌ Blocked (rate limit reached)")
+            print_status()
             break
-    
-    # Wait a short time and try again
-    print("\n3. Waiting 5 seconds and trying again...")
-    time.sleep(10)
-    
-    check_result = rate_limiter.check_limit(session_id)
-    if not check_result['allowed']:
-        print("✅ Still rate limited as expected!")
-        print(f"Status: {check_result['current_count']}/{check_result['limit']} messages used")
-        print(f"Reset time: {check_result['reset_time'].strftime('%Y-%m-%d %H:%M:%S')}")
-        # Calculate time until reset
-        time_until_reset = check_result['reset_time'] - datetime.now()
-        print(f"Time until reset: {str(time_until_reset).split('.')[0]}")
+        print_status()
+
+    print("\n[3] Waiting 5 seconds and retrying...")
+    time.sleep(5)
+    retry = rate_limiter.check_limit(session_id)
+    if retry['allowed']:
+        print("❌ Should still be blocked, but got allowed")
     else:
-        print("❌ Test failed: Rate limit should still be in effect!")
-    
-    # Test reset functionality
-    print("\n4. Testing manual reset functionality...")
+        print("✅ Still blocked as expected")
+        print_status()
+
+    print("\n[4] Resetting rate limit...")
     rate_limiter.reset_session(session_id)
-    
-    # Check if reset worked
     status = rate_limiter.get_session_stats(session_id)
-    print(f"After reset: {status['remaining']}/{status['limit']} messages remaining")
-    
     if status['remaining'] == status['limit']:
-        print("✅ Manual reset successful!")
+        print("✅ Manual reset successful")
     else:
-        print("❌ Manual reset failed!")
-    
-    print("\nTest completed!")
+        print("❌ Manual reset failed")
+    print_status()
+
+    print("\n🎉 Test Completed")
 
 if __name__ == "__main__":
     test_rate_limit_terminal()
