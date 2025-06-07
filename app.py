@@ -204,11 +204,10 @@ def chat_stream():
             full_response = ""
 
             # Process the intent and generate response
-            response = handle_intent(intent_info, memory_manager, user_input)
+          # response = handle_intent(intent_info, memory_manager, user_input)
             
             # Stream the response
-            for chunk in response.split(' '):
-                chunk += ' '
+            for chunk in gpt_service.generate_streaming_response(intent_info, memory_manager, user_input):
                 full_response += chunk
                 yield chunk
 
@@ -217,7 +216,13 @@ def chat_stream():
         except Exception as e:
             yield f"[Error: {str(e)}]"
 
-    return Response(generate(), mimetype='text/plain')
+    return Response(generate(), 
+                    mimetype='text/plain',
+                    headers={
+                        'Cache-Control': 'no-cache',
+                        'X-Accel-Buffering': 'no',
+                        'Transfer-Control': 'chunked'
+                    })
 
 @app.route('/api/rate-limit/status', methods=['GET'])
 def rate_limit_status():

@@ -12,8 +12,6 @@ class GPTService:
 
     def generate_streaming_response(self, intent_info, memory_manager, user_input):
         """Generate a streaming response based on the intent."""
-        print("→ Generating streaming response for intent:", intent_info['intent'])
-        
         intent = intent_info['intent']
         args = intent_info.get('args', {})
         
@@ -21,29 +19,22 @@ class GPTService:
         user_info = memory_manager.get_user_info()
         chat_history = memory_manager.get_chat_history()
         
-        # Create appropriate messages based on intent
+        # Handle simple non-GPT responses
         if intent == 'handle_greeting':
-            return self.response_handlers.handle_greeting(args['greeting'], user_info)
+            yield self.response_handlers.handle_greeting(args['greeting'], user_info)
+            return
             
         elif intent == 'handle_goodbye':
-            return self.response_handlers.handle_goodbye(args['farewell'], user_info)
+            yield self.response_handlers.handle_goodbye(args['farewell'], user_info)
+            return
             
         elif intent == 'handle_confirmation':
-            return self.response_handlers.handle_confirmation(args['confirmation'], user_info)
+            yield self.response_handlers.handle_confirmation(args['confirmation'], user_info)
+            return
             
         elif intent == 'handle_rejection':
-            return self.response_handlers.handle_rejection(args['rejection'], user_info)
-            
-        elif intent == 'process_job_url':
-            return self.generate_resume_sections(args['url'], user_info, chat_history)
-            
-        elif intent == 'process_job_description':
-            return self.process_job_description(args['job_description'], user_info, chat_history)
-            
-        elif intent == 'rewrite_resume_section':
-            section = args['section']
-            prompt = f"Please rewrite the {section} section of my resume to make it more effective."
-            return self.chat_about_resumes(prompt, user_info, chat_history)
+            yield self.response_handlers.handle_rejection(args['rejection'], user_info)
+            return
             
         elif intent == 'store_personal_info':
             # Store the personal information
@@ -53,26 +44,39 @@ class GPTService:
             
             # Create a more specific confirmation message based on what was stored
             if info_type == 'experience':
-                return f"Got it! I've noted that you have {info_value}. This will be helpful for tailoring your resume."
+                yield f"Got it! I've noted that you have {info_value}. This will be helpful for tailoring your resume."
             elif info_type == 'current_role':
-                return f"Perfect! I've noted that you work as {info_value}. Your background will be valuable for your career goals."
+                yield f"Perfect! I've noted that you work as {info_value}. Your background will be valuable for your career goals."
             elif info_type == 'name':
-                return f"Nice to meet you, {info_value}! How can I help with your career today?"
+                yield f"Nice to meet you, {info_value}! How can I help with your career today?"
             elif info_type == 'career_interest':
-                return f"Excellent! I've noted your interest in {info_value}. I'm here to help you with your job search in this field."
+                yield f"Excellent! I've noted your interest in {info_value}. I'm here to help you with your job search in this field."
             else:
-                return f"Thanks for sharing that information! I've noted your {info_type}: {info_value}."
+                yield f"Thanks for sharing that information! I've noted your {info_type}: {info_value}."
+            return
             
         elif intent == 'handle_off_topic':
-            return "I'm specialized in helping with resumes, job applications, and career advice. How can I assist you with your career today?"
+            yield "I'm specialized in helping with resumes, job applications, and career advice. How can I assist you with your career today?"
+            return
+        
+        # Handle GPT-powered responses with streaming
+        elif intent == 'process_job_url':
+            yield from self.generate_resume_sections_stream(args['url'], user_info, chat_history)
+            
+        elif intent == 'process_job_description':
+            yield from self.process_job_description_stream(args['job_description'], user_info, chat_history)
+            
+        elif intent == 'rewrite_resume_section':
+            section = args['section']
+            prompt = f"Please rewrite the {section} section of my resume to make it more effective."
+            yield from self.chat_about_resumes_stream(prompt, user_info, chat_history)
             
         elif intent == 'answer_career_question':
-            return self.chat_about_resumes(args['question'], user_info, chat_history)
+            yield from self.chat_about_resumes_stream(args['question'], user_info, chat_history)
             
         else:
             # Default to chat_about_resumes for unknown intents
-            return self.chat_about_resumes(user_input, user_info, chat_history)
-
+            yield from self.chat_about_resumes_stream(user_input, user_info, chat_history)
     
     def _create_messages(self, content, is_website=True, user_info=None, chat_history=None):
         """Create message format for GPT API."""
@@ -122,8 +126,8 @@ class GPTService:
         
         return memory_context
     
-    def _stream_response(self, messages, temperature=0.3):
-        """Generate streaming response from GPT."""
+    def _stream_response_generator(self, messages, temperature=0.3):
+        """Generate streaming response from GPT as a generator."""
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -133,19 +137,57 @@ class GPTService:
                 stream=True
             )
             
-            full_response = ""
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
-                    full_response += content
-                    from utils import print_streaming
-                    print_streaming(content)
-            
-            return full_response
+                    yield content  # Yield immediately without printing
+                    
         except Exception as e:
-            print(f"Error in _stream_response: {e}")
+            yield f"I apologize, but I encountered an error: {str(e)}"
+    
+    # Keep the old non-streaming methods for backward compatibility
+    def _stream_response(self, messages, temperature=0.3):
+        """Generate complete response from GPT (non-streaming)."""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                max_tokens=1500,
+                temperature=temperature,
+                stream=False
+            )
+            
+            return response.choices[0].message.content
+        except Exception as e:
             return f"I apologize, but I encountered an error: {str(e)}"
     
+    # Streaming versions of the methods
+    def generate_resume_sections_stream(self, url, user_info=None, chat_history=None):
+        """Generate resume sections from a job posting URL with streaming."""
+        try:
+            website = Website(url)
+            messages = self._create_messages(website, is_website=True, user_info=user_info, chat_history=chat_history)
+            yield from self._stream_response_generator(messages, temperature=0.3)
+        except Exception as e:
+            yield f"Error processing URL: {e}"
+    
+    def process_job_description_stream(self, text, user_info=None, chat_history=None):
+        """Process a job description directly from text with streaming."""
+        try:
+            messages = self._create_messages(text, is_website=False, user_info=user_info, chat_history=chat_history)
+            yield from self._stream_response_generator(messages, temperature=0.3)
+        except Exception as e:
+            yield f"Error processing job description: {e}"
+    
+    def chat_about_resumes_stream(self, query, user_info=None, chat_history=None):
+        """Chat about resume and career-related topics with streaming."""
+        try:
+            messages = self._create_messages(query, is_website=False, user_info=user_info, chat_history=chat_history)
+            yield from self._stream_response_generator(messages, temperature=0.7)
+        except Exception as e:
+            yield f"Error in chat response: {e}"
+    
+    # Keep non-streaming versions for other endpoints
     def generate_resume_sections(self, url, user_info=None, chat_history=None):
         """Generate resume sections from a job posting URL."""
         try:

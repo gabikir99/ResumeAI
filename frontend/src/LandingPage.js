@@ -199,6 +199,8 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
     setIsTyping(true);
     setConnectionError(false);
 
+      inputRef.current?.focus();
+
     const aiResponseId = Date.now() + 1;
     const aiResponseTime = formatTime();
 
@@ -207,7 +209,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
       ...prev,
       {
         id: aiResponseId,
-        text: 'bot is typing....',
+        text: 'bot is typing...',
         sender: 'ai',
         time: aiResponseTime,
         isStreaming: true
@@ -230,9 +232,8 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
        
-
-        let fullResponse = '';
-        let partial = '';
+        let accumulatedText = ''; 
+  
 
         while (true) {
           const { value, done } = await reader.read();
@@ -240,14 +241,13 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
 
           const chunk = decoder.decode(value, { stream: true });
 
-          fullResponse += chunk;
-          partial += chunk;
+          accumulatedText += chunk; 
 
           // Update frontend with partial stream
           setMessages(prev =>
           prev.map(msg =>
           msg.id === aiResponseId 
-            ? { ...msg, text: partial, isStreaming: true } 
+            ? { ...msg, text: accumulatedText, isStreaming: true } 
             : msg
     )
   );
@@ -258,7 +258,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
         setMessages(prev =>
           prev.map(msg =>
             msg.id === aiResponseId 
-              ? { ...msg, text: fullResponse || '[Empty Response]', isStreaming: false } 
+              ? { ...msg, text: accumulatedText || '[Empty Response]', isStreaming: false } 
               : msg
           )
         );
@@ -466,7 +466,10 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
                 placeholder="Ask me about resume optimization..."
                 className="chat-input"
                 rows="1"
-                disabled={isTyping}
+                readOnly={isTyping}
+                style={{
+                  cursor: isTyping ? 'wait' : 'text'
+                }}
               />
               <button
                 onClick={handleSendMessage}
