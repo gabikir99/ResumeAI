@@ -45,6 +45,130 @@ const MarkdownRenderer = ({ text }) => {
     />
   );
 };
+
+// Feedback Modal Component
+const FeedbackModal = ({ isOpen, onClose, onSubmit, externalSuccess, setExternalSuccess }) => {
+  const [feedback, setFeedback] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!feedback.trim()) return;
+
+    setIsSubmitting(true);
+    
+    try {
+      // Simulate API call
+      await onSubmit(feedback);
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+        setFeedback('');
+        onClose();
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isSubmitting) {
+      setFeedback('');
+      setIsSuccess(false);
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="feedback-modal-overlay" onClick={handleClose}>
+      <div className="feedback-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="feedback-modal-header">
+          <div className="feedback-modal-title">
+            <span className="feedback-icon">💭</span>
+            <h3>Share Your Feedback</h3>
+          </div>
+          <button 
+            className="feedback-close-btn"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="feedback-modal-content">
+          {isSuccess ? (
+            <div className="feedback-success">
+              <div className="success-icon">✅</div>
+              <h4>Thank you for your feedback!</h4>
+              <p>We appreciate your input and will use it to improve our service.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div className="feedback-form-group">
+                <label htmlFor="feedback-text">
+                  Tell us what you think about our AI Resume Assistant
+                </label>
+                <textarea
+                  ref={textareaRef}
+                  id="feedback-text"
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="Share your experience, suggestions, or report any issues..."
+                  className="feedback-textarea"
+                  rows="5"
+                  disabled={isSubmitting}
+                  maxLength={1000}
+                />
+                <div className="character-count">
+                  {feedback.length}/1000
+                </div>
+              </div>
+
+              <div className="feedback-modal-actions">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="feedback-btn feedback-btn-secondary"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="feedback-btn feedback-btn-primary"
+                  disabled={!feedback.trim() || isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="loading-spinner"></span>
+                      Sending...
+                    </>
+                  ) : (
+                    'Send Feedback'
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Landing Page Component
 const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickSignup, onLogout }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -56,27 +180,28 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   const [selectedFile, setSelectedFile] = useState(null);
   const [userName, setUserName] = useState('');
   const [connectionError, setConnectionError] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const [rateLimitInfo, setRateLimitInfo] = useState({ remaining: 50, total: 50 });
-
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
- const fetchRateLimitInfo = async () => {
+
+ const fetchRateLimitInfo = async (sessionIdToUse = sessionId) => {
   try {
-    const res = await fetch(`${API_BASE}/api/rate-limit/status?session_id=${sessionId}`);
+    const res = await fetch(`${API_BASE}/api/rate-limit/status?session_id=${sessionIdToUse}`);
     if (!res.ok) throw new Error('Failed to fetch rate limit status');
     const data = await res.json();
-    console.log("✅ Rate limit data:", data); // <- ADD THIS LINE
+    console.log("✅ Rate limit data:", data);
     setRateLimitInfo({ remaining: data.messages_remaining, total: data.messages_limit });
   } catch (err) {
     console.error('Error fetching rate limit status:', err);
   }
 };
-
 
   useEffect(() => {
     scrollToBottom();
@@ -87,6 +212,28 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
       inputRef.current.focus();
     }
   }, [showChat]);
+
+  const handleFeedbackSubmit = async (feedbackText) => {
+
+    try {
+    
+      const response = await fetch(`${API_BASE}/api/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedback: feedbackText, user_id: user?.id })
+    });
+
+    if (response.ok) {
+      setFeedbackSubmitted(true);
+    } else {
+      console.error("email could not be sent");
+    }
+  } catch (error) {
+    console.error('error submitting feedback', error);
+  }
+
+  
+  };
 
   const handleOpenChat = () => {
     setShowChat(true);
@@ -141,17 +288,21 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   // Persist session ID so chats remain consistent across reloads
-  const [sessionId, setSessionId] = useState(() =>
-    sessionStorage.getItem('session_id') || null
-  );
+  const [sessionId, setSessionId] = useState(() => {
+    let storedSessionID = sessionStorage.getItem('session_id') || null
+     if (!storedSessionID) {
+    storedSessionID = 'session_'+ Date.now() + '_' + Math.random().toString(36).substr(2,9); 
+    sessionStorage.setItem('session_id', storedSessionID);
+  }
+  return storedSessionID; 
+});
+ 
 
   useEffect(() => {
     if (sessionId) {
-      sessionStorage.getItem('session_id', sessionId);
+      sessionStorage.setItem('session_id', sessionId);
     }
   }, [sessionId]);
-
-
 
   // Test server connection when chat opens
   useEffect(() => {
@@ -183,150 +334,156 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() && !selectedFile) return;
+  if (!inputMessage.trim() && !selectedFile) return;
 
-    const userMessage = {
-      id: Date.now(),
-      text: inputMessage.trim(),
-      file: selectedFile ? { name: selectedFile.name, size: selectedFile.size } : null,
-      sender: 'user',
-      time: formatTime(),
-    };
+  const userMessage = {
+    id: Date.now(),
+    text: inputMessage.trim(),
+    file: selectedFile ? { name: selectedFile.name, size: selectedFile.size } : null,
+    sender: 'user',
+    time: formatTime(),
+  };
 
-    setMessages((prev) => [...prev, userMessage]);
-    const originalMessage = inputMessage.trim();
-    setInputMessage('');
-    setIsTyping(true);
-    setConnectionError(false);
+  setMessages((prev) => [...prev, userMessage]);
+  const originalMessage = inputMessage.trim();
+  setInputMessage('');
+  setIsTyping(true);
+  setConnectionError(false);
 
-      inputRef.current?.focus();
+  inputRef.current?.focus();
 
-    const aiResponseId = Date.now() + 1;
-    const aiResponseTime = formatTime();
+  const aiResponseId = Date.now() + 1;
+  const aiResponseTime = formatTime();
 
-   
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: aiResponseId,
-        text: 'bot is typing...',
-        sender: 'ai',
-        time: aiResponseTime,
-        isStreaming: true
+  setMessages((prev) => [
+    ...prev,
+    {
+      id: aiResponseId,
+      text: 'bot is typing...',
+      sender: 'ai',
+      time: aiResponseTime,
+      isStreaming: true
+    }
+  ]);
+
+  // Track the current session ID for this request
+  let currentSessionId = sessionId;
+  console.log("Sending with session_id", currentSessionId);
+
+  try {
+    // Try streaming first
+    const response = await fetch(`${API_BASE}/api/chat-stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        message: originalMessage, 
+        session_id: currentSessionId 
+      })
+    });
+
+    if (response.ok && response.body) {
+      // Handle streaming response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+     
+      let accumulatedText = ''; 
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        accumulatedText += chunk; 
+
+        // Update frontend with partial stream
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === aiResponseId 
+              ? { ...msg, text: accumulatedText, isStreaming: true } 
+              : msg
+          )
+        );
       }
-    ]);
 
-    try {
-      // Try streaming first
-      const response = await fetch(`${API_BASE}/api/chat-stream`, {
+      // Finalize the message
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === aiResponseId 
+            ? { ...msg, text: accumulatedText || '[Empty Response]', isStreaming: false } 
+            : msg
+        )
+      );
+      
+      // For streaming, we need to get session_id from response headers or handle differently
+      // Check if your streaming endpoint returns session_id in headers
+      await fetchRateLimitInfo();
+
+    } else {
+      // Fall back to regular API call
+      console.log('Streaming failed, trying regular API...');
+      const fallbackResponse = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: originalMessage, 
-          session_id: sessionId 
+          session_id: currentSessionId 
         })
       });
 
-      if (response.ok && response.body) {
-        // Handle streaming response
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-       
-        let accumulatedText = ''; 
-  
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-
-          accumulatedText += chunk; 
-
-          // Update frontend with partial stream
-          setMessages(prev =>
-          prev.map(msg =>
-          msg.id === aiResponseId 
-            ? { ...msg, text: accumulatedText, isStreaming: true } 
-            : msg
-    )
-  );
-}
-
-
-        // Finalize the message
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiResponseId 
-              ? { ...msg, text: accumulatedText || '[Empty Response]', isStreaming: false } 
-              : msg
-          )
-        );
-        await fetchRateLimitInfo();
-
-      } else {
-        // Fall back to regular API call
-        console.log('Streaming failed, trying regular API...');
-        const fallbackResponse = await fetch(`${API_BASE}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            message: originalMessage, 
-            session_id: sessionId 
-          })
-        });
-
-        if (!fallbackResponse.ok) {
-          throw new Error(`API request failed with status: ${fallbackResponse.status}`);
-        }
-
-        const data = await fallbackResponse.json();
-        
-        // Update session ID if provided
-        if (data.session_id && data.session_id !== sessionId) {
-          setSessionId(data.session_id);
-        }
-
-        // Update the message with the response
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiResponseId 
-              ? { 
-                  ...msg, 
-                  text: data.response || 'Sorry, I couldn\'t generate a response.', 
-                  isStreaming: false 
-                } 
-              : msg
-          )
-        );
-        await fetchRateLimitInfo();
+      if (!fallbackResponse.ok) {
+        throw new Error(`API request failed with status: ${fallbackResponse.status}`);
       }
 
-    } catch (error) {
-      console.error('Error in handleSendMessage:', error);
-      setConnectionError(true);
+      const data = await fallbackResponse.json();
+      
+      // Update session ID if provided and use it immediately
+      if (data.session_id) {
+        currentSessionId = data.session_id;
+        setSessionId(data.session_id);
+        console.log("Received new session_id from backend:", currentSessionId);
+      }
 
-      // Show error message
-      const errorMessage = connectionError 
-        ? `Connection error: ${error.message}\n\nPlease check that your backend server is running on ${API_BASE}`
-        : `Sorry, I encountered an error: ${error.message}`;
-
+      // Update the message with the response
       setMessages(prev =>
         prev.map(msg =>
-          msg.id === aiResponseId
-            ? { ...msg, text: errorMessage, isStreaming: false, isError: true }
+          msg.id === aiResponseId 
+            ? { 
+                ...msg, 
+                text: data.response || 'Sorry, I couldn\'t generate a response.', 
+                isStreaming: false 
+              } 
             : msg
         )
       );
-    } finally {
-      setIsTyping(false);
-      setSelectedFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      
+      // Use the fresh session ID for rate limit check
+      await fetchRateLimitInfo(currentSessionId);
     }
-  };
 
+  } catch (error) {
+    console.error('Error in handleSendMessage:', error);
+    setConnectionError(true);
+
+    // Show error message
+    const errorMessage = connectionError 
+      ? `Connection error: ${error.message}\n\nPlease check that your backend server is running on ${API_BASE}`
+      : `Sorry, I encountered an error: ${error.message}`;
+
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === aiResponseId
+          ? { ...msg, text: errorMessage, isStreaming: false, isError: true }
+          : msg
+      )
+    );
+  } finally {
+    setIsTyping(false);
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+};
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -373,9 +530,18 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
                 </p>
               </div>
             </div>
-            <button onClick={handleCloseChat} className="close-button">
-              ×
-            </button>
+            <div className="chat-header-actions">
+              <button
+                onClick={() => setIsFeedbackModalOpen(true)}
+                className="feedback-header-btn"
+                title="Share feedback"
+              >
+                💭
+              </button>
+              <button onClick={handleCloseChat} className="close-button">
+                ×
+              </button>
+            </div>
           </div>
 
           <div className="chat-messages">
@@ -448,11 +614,8 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
                     </div>
                   </div>
                 ))}
-                 
               </>
-             
             )}
-          
             <div ref={messagesEndRef} />
           </div>
 
@@ -513,11 +676,19 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
             </div>
           </div>
         </div>
+
+        <FeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+          onSubmit={handleFeedbackSubmit}
+          externalSuccess={feedbackSubmitted}
+          setExternalSuccess={setFeedbackSubmitted}
+        />
       </div>
     );
   }
 
- return (
+  return (
     <div className="landing-container">
       {/* Background Elements */}
       <div className="background-elements">
@@ -526,28 +697,29 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
         <div className="bg-element bg-element-3"></div>
       </div>
 
-      <div className="main-content">
-      
-          {!user && ( 
-           <div className='auth-buttons'>
-             <button className='auth-btn login' onClick={onClickLogin}>Login</button>
-            <button className='auth-btn' onClick={onClickSignup}>Sign up</button>
-            </div>
-          )}
-          {user && (
-            <div className='auth-buttons'>
-              <button className='auth-btn' onClick={onLogout}>Sign Out</button>
-              </div>
-          )}
+      {/* Floating Feedback Button */}
+      <button
+        onClick={() => setIsFeedbackModalOpen(true)}
+        className="floating-feedback-btn"
+        title="Share your feedback"
+      >
+        <span className="feedback-btn-icon">💭</span>
+        <span className="feedback-btn-text">Feedback</span>
+      </button>
 
-         
-       
-       
-       
+      <div className="main-content">
+        {!user && ( 
+          <div className='auth-buttons'>
+            <button className='auth-btn login' onClick={onClickLogin}>Login</button>
+            <button className='auth-btn' onClick={onClickSignup}>Sign up</button>
+          </div>
+        )}
+        {user && (
+          <div className='auth-buttons'>
+            <button className='auth-btn' onClick={onLogout}>Sign Out</button>
+          </div>
+        )}
         
-       
-        
-       
         <div className="content-grid">
           {/* Left Content */}
           <div className="left-content">
@@ -631,8 +803,14 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
           </div>
         </div>
       </div>
+
+      <FeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+        onSubmit={handleFeedbackSubmit}
+      />
     </div>
   );
 };
 
-export default LandingPage; 
+export default LandingPage;
