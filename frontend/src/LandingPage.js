@@ -805,7 +805,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
             
             <h1 className="main-heading">
               Land Your{' '}
-              <span className="highlight-text">Dream Job</span>
+              <span className="highlight-text">Dream Job with ResumindAI</span>
             </h1>
             
             <p className="main-description">
