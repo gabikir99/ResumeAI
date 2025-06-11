@@ -39,19 +39,29 @@ pdf_processor = PDFProcessor()
 # Dictionary to store memory managers for different sessions
 session_memories = {}
 
+
 def rate_limit_check(f):
     """
     Decorator to check rate limits before processing requests.
     """
     @wraps(f)
     def wrapper(*args, **kwargs):
-        # Get session_id from request
-        data = request.get_json() or {}
-        session_id = data.get('session_id')
+        session_id = None
         
-        # For file uploads, get from form data
-        if not session_id and request.form:
+        # Try to get session_id from different sources without interfering with request parsing
+        if request.content_type and 'application/json' in request.content_type:
+            # Only try to get JSON if content type is actually JSON
+            try:
+                data = request.get_json() or {}
+                session_id = data.get('session_id')
+            except:
+                pass
+        elif request.form:
+            # For multipart/form-data (file uploads)
             session_id = request.form.get('session_id')
+        elif request.args:
+            # For URL parameters
+            session_id = request.args.get('session_id')
         
         if not session_id:
             # If no session_id, proceed without rate limiting
@@ -349,6 +359,7 @@ def upload_pdf():
     
     if not file.filename.lower().endswith('.pdf'):
         return jsonify({'error': 'File must be a PDF'}), 400
+    file.seek(0)  # Add this line
     
     # Get memory manager for this session
     memory_manager, session_id = get_memory_manager(session_id)

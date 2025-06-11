@@ -333,7 +333,78 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
     }
   };
 
-  const handleSendMessage = async () => {
+ const handleFIleSend = async (responseId) => {
+  if (!selectedFile) {
+    console.error("No file selected");
+    return;
+  }
+
+  const formData = new FormData(); 
+  formData.append('file', selectedFile);
+  formData.append('session_id', sessionId);
+
+  try {
+    console.log("Making request to:", `${API_BASE}/api/upload/pdf`);
+    
+    const response = await fetch(`${API_BASE}/api/upload/pdf`, {
+      method: 'POST',
+      body: formData
+    }); 
+
+    console.log("Response status:", response.status);
+    console.log("Response status text:", response.statusText);
+
+    // Check if response is ok first
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Upload failed with status: ${response.status} - ${errorText}`);
+    }
+
+    // Only parse as JSON if response is ok
+    const result = await response.json(); 
+    console.log("File upload result:", result);
+
+    // Update session ID if provided by backend
+    if (result.session_id) {
+      setSessionId(result.session_id);
+      console.log("Updated session_id from file upload:", result.session_id);
+    }
+
+    // Update the AI response with the result
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === responseId
+          ? { 
+              ...msg, 
+              text: result.response || result.message || 'File uploaded successfully', 
+              isStreaming: false 
+            } 
+          : msg
+      )
+    );
+
+    // Update rate limit info
+    await fetchRateLimitInfo();
+
+  } catch(error) {
+    console.error("Couldn't send the file attachment:", error);
+    
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === responseId
+          ? { 
+              ...msg, 
+              text: `Error uploading file: ${error.message}`, 
+              isStreaming: false, 
+              isError: true 
+            }
+          : msg
+      )
+    );
+  }
+};
+
+ const handleSendMessage = async () => {
   if (!inputMessage.trim() && !selectedFile) return;
 
   const userMessage = {
@@ -366,62 +437,17 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
     }
   ]);
 
-  // Track the current session ID for this request
   let currentSessionId = sessionId;
   console.log("Sending with session_id", currentSessionId);
 
   try {
-    // Try streaming first
-    const response = await fetch(`${API_BASE}/api/chat-stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        message: originalMessage, 
-        session_id: currentSessionId 
-      })
-    });
-
-    if (response.ok && response.body) {
-      // Handle streaming response
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-     
-      let accumulatedText = ''; 
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        accumulatedText += chunk; 
-
-        // Update frontend with partial stream
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiResponseId 
-              ? { ...msg, text: accumulatedText, isStreaming: true } 
-              : msg
-          )
-        );
-      }
-
-      // Finalize the message
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === aiResponseId 
-            ? { ...msg, text: accumulatedText || '[Empty Response]', isStreaming: false } 
-            : msg
-        )
-      );
-      
-      // For streaming, we need to get session_id from response headers or handle differently
-      // Check if your streaming endpoint returns session_id in headers
-      await fetchRateLimitInfo();
-
+    // Check what type of content we're sending
+    if (selectedFile) {
+      // Handle file upload
+      await handleFIleSend(aiResponseId);
     } else {
-      // Fall back to regular API call
-      console.log('Streaming failed, trying regular API...');
-      const fallbackResponse = await fetch(`${API_BASE}/api/chat`, {
+      // Handle text message with streaming
+      const response = await fetch(`${API_BASE}/api/chat-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -430,35 +456,85 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
         })
       });
 
-      if (!fallbackResponse.ok) {
-        throw new Error(`API request failed with status: ${fallbackResponse.status}`);
-      }
+      if (response.ok && response.body) {
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+       
+        let accumulatedText = ''; 
 
-      const data = await fallbackResponse.json();
-      
-      // Update session ID if provided and use it immediately
-      if (data.session_id) {
-        currentSessionId = data.session_id;
-        setSessionId(data.session_id);
-        console.log("Received new session_id from backend:", currentSessionId);
-      }
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
 
-      // Update the message with the response
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === aiResponseId 
-            ? { 
-                ...msg, 
-                text: data.response || 'Sorry, I couldn\'t generate a response.', 
-                isStreaming: false 
-              } 
-            : msg
-        )
-      );
+          const chunk = decoder.decode(value, { stream: true });
+          accumulatedText += chunk; 
+
+          // Update frontend with partial stream
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === aiResponseId 
+                ? { ...msg, text: accumulatedText, isStreaming: true } 
+                : msg
+            )
+          );
+        }
+
+        // Finalize the message
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === aiResponseId 
+              ? { ...msg, text: accumulatedText || '[Empty Response]', isStreaming: false } 
+              : msg
+          )
+        );
       
-      // Use the fresh session ID for rate limit check
-      await fetchRateLimitInfo(currentSessionId);
-    }
+        // For streaming, we need to get session_id from response headers or handle differently
+        // Check if your streaming endpoint returns session_id in headers
+        await fetchRateLimitInfo();
+
+      } else {
+        // Fall back to regular API call
+        console.log('Streaming failed, trying regular API...');
+        const fallbackResponse = await fetch(`${API_BASE}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            message: originalMessage, 
+            session_id: currentSessionId 
+          })
+        });
+
+        if (!fallbackResponse.ok) {
+          throw new Error(`API request failed with status: ${fallbackResponse.status}`);
+        }
+
+        const data = await fallbackResponse.json();
+        
+        // Update session ID if provided and use it immediately
+        if (data.session_id) {
+          currentSessionId = data.session_id;
+          setSessionId(data.session_id);
+          console.log("Received new session_id from backend:", currentSessionId);
+        }
+
+        // Update the message with the response
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === aiResponseId 
+              ? { 
+                  ...msg, 
+                  text: data.response || 'Sorry, I couldn\'t generate a response.', 
+                  isStreaming: false 
+                } 
+              : msg
+          )
+        );
+        
+        // Use the fresh session ID for rate limit check
+        await fetchRateLimitInfo(currentSessionId);
+      }
+    } // <- This closes the else block
 
   } catch (error) {
     console.error('Error in handleSendMessage:', error);
