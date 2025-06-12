@@ -19,7 +19,7 @@ def main():
         return
     
     # Initialize in-memory rate limiter (50 messages per 24 hours)
-    rate_limiter = InMemoryRateLimiter(message_limit=5, reset_period_hours=1)
+    rate_limiter = InMemoryRateLimiter(message_limit=50, reset_period_hours=24)
     
     # Initialize services
     client = OpenAI(api_key=api_key)
@@ -182,13 +182,13 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
         return response
     
     elif intent == 'handle_confirmation':
-        response = "Great! Making those changes now."
+        response = response_handlers.handle_confirmation(args['confirmation'], memory_manager.get_user_info())
         print("\n", end="")
         print_streaming(response)
         return response
 
     elif intent == 'handle_rejection':
-        response = "No worries! Let me know if you'd like help later."
+        response = response_handlers.handle_rejection(args['rejection'], memory_manager.get_user_info())
         print("\n", end="")
         print_streaming(response)
         return response
@@ -200,6 +200,9 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
             memory_manager.get_user_info(),
             memory_manager.get_chat_history()
         )
+        # FIXED: Actually print the response!
+        if response:
+            print_streaming(response)
         return response
         
     elif intent == 'process_job_description':
@@ -209,6 +212,9 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
             memory_manager.get_user_info(),
             memory_manager.get_chat_history()
         )
+        # FIXED: Actually print the response!
+        if response:
+            print_streaming(response)
         return response
         
     elif intent == 'answer_career_question':
@@ -218,6 +224,22 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
             memory_manager.get_user_info(), 
             memory_manager.get_chat_history()
         )
+        # FIXED: Actually print the response!
+        if response:
+            print_streaming(response)
+        return response
+        
+    elif intent == 'rewrite_resume_section':
+        section = args['section']
+        print("\n", end="")
+        response = gpt_service.chat_about_resumes(
+            f"Please rewrite the {section} section of my resume", 
+            memory_manager.get_user_info(), 
+            memory_manager.get_chat_history()
+        )
+        # FIXED: Actually print the response!
+        if response:
+            print_streaming(response)
         return response
         
     elif intent == 'store_personal_info':
@@ -249,9 +271,16 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
         return response
         
     else:
-        response = "I'm not sure I understood that. Could you please rephrase your question about careers or resumes?"
+        # Fallback - treat as career question instead of giving error
         print("\n", end="")
-        print_streaming(response)
+        response = gpt_service.chat_about_resumes(
+            original_input, 
+            memory_manager.get_user_info(), 
+            memory_manager.get_chat_history()
+        )
+        # FIXED: Actually print the response!
+        if response:
+            print_streaming(response)
         return response
 
 if __name__ == "__main__":

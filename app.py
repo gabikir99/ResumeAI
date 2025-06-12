@@ -126,6 +126,12 @@ def handle_intent(intent_info, memory_manager, original_input):
         
     elif intent == 'handle_goodbye':
         return response_handlers.handle_goodbye(args['farewell'], memory_manager.get_user_info())
+    
+    elif intent == 'handle_confirmation':
+        return response_handlers.handle_confirmation(args['confirmation'], memory_manager.get_user_info())
+    
+    elif intent == 'handle_rejection':
+        return response_handlers.handle_rejection(args['rejection'], memory_manager.get_user_info())
         
     elif intent == 'process_job_url':
         return gpt_service.generate_resume_sections(
@@ -147,12 +153,6 @@ def handle_intent(intent_info, memory_manager, original_input):
             memory_manager.get_user_info(), 
             memory_manager.get_chat_history()
         )
-    
-    elif intent == 'handle_confirmation':
-        return response_handlers.handle_confirmation(args['confirmation'], memory_manager.get_user_info())
-    
-    elif intent == 'handle_rejection':
-        return response_handlers.handle_rejection(args['rejection'], memory_manager.get_user_info())
         
     elif intent == 'rewrite_resume_section':
         section = args['section']
@@ -185,7 +185,12 @@ def handle_intent(intent_info, memory_manager, original_input):
         return "I'm specialized in helping with resumes, job applications, and career advice. How can I assist you with your career today?"
         
     else:
-        return "I'm not sure I understood that. Could you please rephrase your question about careers or resumes?"
+        # FIXED: Instead of generic error, treat as career question
+        return gpt_service.chat_about_resumes(
+            original_input, 
+            memory_manager.get_user_info(), 
+            memory_manager.get_chat_history()
+        )
 
 @app.route('/api/chat-stream', methods=['POST'])
 @rate_limit_check
@@ -213,13 +218,18 @@ def chat_stream():
             intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
             full_response = ""
 
-            # Process the intent and generate response
-          # response = handle_intent(intent_info, memory_manager, user_input)
-            
-            # Stream the response
-            for chunk in gpt_service.generate_streaming_response(intent_info, memory_manager, user_input):
-                full_response += chunk
-                yield chunk
+            # FIXED: Use the improved handle_intent function
+            # Check if GPT service has streaming capability
+            if hasattr(gpt_service, 'generate_streaming_response'):
+                # Stream the response if available
+                for chunk in gpt_service.generate_streaming_response(intent_info, memory_manager, user_input):
+                    full_response += chunk
+                    yield chunk
+            else:
+                # Fallback to non-streaming response
+                response = handle_intent(intent_info, memory_manager, user_input)
+                full_response = response
+                yield response
 
             memory_manager.add_message(user_input, full_response)
 
@@ -353,13 +363,14 @@ def upload_pdf():
     
     file = request.files['file']
     session_id = request.form.get('session_id', None)
+    user_message = request.form.get('message', '')  # Get the user's actual message
     
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     
     if not file.filename.lower().endswith('.pdf'):
         return jsonify({'error': 'File must be a PDF'}), 400
-    file.seek(0)  # Add this line
+    file.seek(0)
     
     # Get memory manager for this session
     memory_manager, session_id = get_memory_manager(session_id)
@@ -374,10 +385,21 @@ def upload_pdf():
         # Store the extracted text in memory for future reference
         memory_manager.store_user_info(f"uploaded_{doc_type}_text", extracted_text[:500] + "...")
         
-        # Process based on document type
+        # FIXED: Use the user's actual message instead of generic prompt
+        if user_message:
+            # User provided specific instructions
+            full_prompt = f"{user_message}\n\nHere's the {doc_type} content:\n\n{extracted_text}"
+        else:
+            # Fallback to generic analysis if no message provided
+            if doc_type == 'resume':
+                full_prompt = f"I've uploaded my resume. Can you analyze it and give me feedback? Here's the content:\n\n{extracted_text}"
+            else:
+                full_prompt = f"I've uploaded a job description. Here's the content:\n\n{extracted_text}"
+        
+        # Process based on document type but use the user's actual request
         if doc_type == 'resume':
             response = gpt_service.chat_about_resumes(
-                f"I've uploaded my resume. Can you analyze it and give me feedback? Here's the content:\n\n{extracted_text}",
+                full_prompt,
                 memory_manager.get_user_info(),
                 memory_manager.get_chat_history()
             )
@@ -388,9 +410,9 @@ def upload_pdf():
                 memory_manager.get_chat_history()
             )
         
-        # Add to memory
+        # Add to memory with the user's actual message
         memory_manager.add_message(
-            f"[Uploaded {doc_type} PDF: {file.filename}]", 
+            f"{user_message} [Uploaded {doc_type} PDF: {file.filename}]" if user_message else f"[Uploaded {doc_type} PDF: {file.filename}]", 
             response
         )
         

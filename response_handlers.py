@@ -56,7 +56,42 @@ class ResponseHandlers:
         return response
     
     def handle_confirmation(self, confirmation, user_info=None):
-        return "Great! Making those changes now."  # or customize based on flow
+        confirmation_lower = confirmation.lower()
     
+        if any(word in confirmation_lower for word in ['next', 'move on', 'continue', 'proceed']):
+            responses = [
+                "Absolutely! 👍 What's the next job you'd like help with?",
+                "Perfect! ✅ Ready to tackle the next application!",
+                "Great! 🎉 What position should we work on next?",
+                "Sounds good! ⭐ Tell me about the next opportunity!"
+            ]
+        else:
+            responses = [
+                "Great! 👍 Let me know if you need anything else!",
+                "Perfect! ✅ I'm here if you need more help!",
+                "Awesome! 🎉 Feel free to ask if you have other questions!",
+                "Excellent! ⭐ Happy to help with anything else!"
+            ]
+        return random.choice(responses)
+
     def handle_rejection(self, rejection, user_info=None):
-        return "No problem at all. Let me know if you need help later!"
+        rejection_lower = rejection.lower()
+        
+        # Check if it's rejecting a specific suggestion/offer
+        if any(word in rejection_lower for word in ['not interested', 'no thanks', 'no thank you']):
+            responses = [
+                "No problem at all! 😊 Let me know what you'd prefer to work on!",
+                "That's totally fine! 👌 What would be more helpful for you?",
+                "No worries! 🙂 What other career assistance can I provide?",
+                "Understood! 💙 How else can I help with your job search?"
+            ]
+        else:
+            # For simple "no" responses
+            responses = [
+                "No problem at all! 😊 Let me know if you need help later!",
+                "That's totally fine! 👌 I'm here whenever you're ready!",
+                "No worries! 🙂 Feel free to reach out anytime!",
+                "Understood! 💙 I'm here if you change your mind!"
+            ]
+        
+        return random.choice(responses)

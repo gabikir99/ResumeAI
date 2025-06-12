@@ -26,18 +26,12 @@ You can help with ANY resume section or format the user requests, including but 
 - **Project sections** (relevant projects, portfolio items, case studies)
 - **Additional sections** (volunteer work, publications, awards, etc.)
 
-## Adaptive Response Approach:
-- **Recognize synonyms**: Understand that "summary statement" = "objective" = "professional profile" = "mission statement"
-- **Match user terminology**: Use the same words the user uses (if they say "summary," respond with "summary")
-- **Flexible formatting**: Adapt to different resume styles and user preferences
-- **Context-aware**: Tailor advice based on industry, career level, and specific goals
-
-## When Helping with Job-Related Content:
-- Analyze job descriptions and requirements thoroughly
-- Generate 6-7 specific, relevant qualification points that match the role
-- Organize skills into logical, industry-appropriate categories
-- Create compelling, personalized content using stored user information
-- Suggest improvements and optimizations based on best practices
+## Response Guidelines:
+- Always provide specific, actionable answers to user questions
+- NEVER give generic responses like "I specialize in..." when asked a direct question
+- If asked about resume length, give a clear answer about 1-page vs 2-page resumes
+- If asked about sections, provide specific guidance
+- Use the user's name when available for personalization
 
 ## Formatting Guidelines:
 Use clear, professional Markdown formatting:
@@ -63,15 +57,13 @@ If asked about non-career topics, politely redirect: "I specialize in career and
 - Supportive and confidence-building
 - Industry-aware and current with best practices
 
-## IMPORTANT - Avoid Hallucination:
-- NEVER make up information about the user that hasn't been provided
-- If you need specific information to create a resume section or provide tailored advice, ASK the user directly
-- Be transparent about what information you need to provide quality assistance
-- For example: "To create an effective professional summary, I'll need to know your years of experience, current role, and key skills. Could you share those details with me?"
-- Always check if you have enough context before generating content
-- If unsure about industry-specific details, ask clarifying questions
+## IMPORTANT - Avoid Generic Responses:
+- NEVER respond with "I'm specialized in helping with resumes..." when asked a specific question
+- Always attempt to answer the user's actual question
+- If you need more information, ask specific follow-up questions
+- Be helpful and specific, not generic and deflecting
 
-Remember: Be flexible and adaptive. The user knows what they need - your job is to provide expert guidance regardless of the specific terminology they use.
+Remember: Be helpful and specific. Answer questions directly rather than giving generic responses about your capabilities.
 """
 
 INTENT_FUNCTIONS = [
@@ -208,7 +200,7 @@ class IntentClassifier:
             return self._simple_fallback_classification(user_input)
     
     def _classify_with_gpt(self, user_input, user_info=None):
-        """Classify intent using GPT."""
+        """Classify intent using GPT with simplified logic."""
         memory_context = ""
         if user_info:
             memory_info = [f"{k}: {v}" for k, v in user_info.items() if v]
@@ -216,36 +208,34 @@ class IntentClassifier:
                 memory_context = f"\n\nUser's stored information: {', '.join(memory_info)}"
         
         system_message = f"""
-        You are an intent classifier for a career advice chatbot. Analyze the user's input and determine the most appropriate action.
+        You are an intent classifier for a career chatbot. Choose the most appropriate function:
+
+        1. **store_personal_info** - If user shares personal details (name, experience, role, interests)
+           Examples: "my name is John", "I have 5 years experience", "I work as a developer"
+
+        2. **handle_greeting** - For simple greetings without personal info
+           Examples: "hello", "hi there", "good morning"
+
+        3. **handle_goodbye** - For farewells  
+           Examples: "goodbye", "thanks", "bye"
+
+        4. **process_job_url** - For valid URLs
+
+        5. **process_job_description** - For long job posting text (50+ words)
+
+        6. **answer_career_question** - For career/resume questions and requests
+           Examples: "help with resume", "what should I include", "career advice", "is it better to have 2 pages or one"
+
+        7. **handle_off_topic** - For non-career topics
+           Examples: "what's the weather", "how to cook pasta"
+
+        8. **handle_confirmation/rejection** - For simple yes/no responses
+
+        9. **rewrite_resume_section** - For requests to rewrite specific resume sections
+
+        Priority: Personal info > Greetings/Goodbyes > Career questions > Off-topic
         
-        Guidelines:
-        1. **HIGHEST PRIORITY - Personal Info Storage**: If ANY personal information is mentioned, ALWAYS use store_personal_info, even if combined with greetings
-        2. If it's a greeting without personal info (hello, hi, hey), use handle_greeting
-        3. If it's a farewell (goodbye, bye, thanks), use handle_goodbye
-        4. If it's a valid URL, use process_job_url
-        5. If it's a long job description text (50+ words with job keywords), use process_job_description
-        6. If asking about stored info ("what is my name", "who am i"), use answer_career_question
-        
-        **CRITICAL EXAMPLES for store_personal_info:**
-        - "hello my name is John" → store_personal_info with name="John"
-        - "hi I'm Sarah" → store_personal_info with name="Sarah"
-        - "my name is Alex" → store_personal_info with name="Alex"
-        - "I have 5 years experience" → store_personal_info with experience
-        - "I work as a developer" → store_personal_info with current_role
-        - "I want to work in data science" → store_personal_info with career_interest
-        - "create resume for marketing" → store_personal_info with career_interest
-        
-        **NEVER** classify inputs containing personal information as anything other than store_personal_info.
-        
-        CAREER-RELATED REQUESTS (use answer_career_question):
-        - Resume help: "create resume", "write objective", "mission statement", "summary statement", "professional profile"
-        - Career advice: "career guidance", "job search help", "interview tips"
-        - Any request for resume sections: objective, summary, skills, experience, qualifications
-        - Career questions: "how to", "help with", "advice on" + career topics
-        
-        ONLY use handle_off_topic for completely non-career topics like weather, sports, cooking, etc.
-        
-        Remember: Personal information detection takes absolute priority over everything else.{memory_context}
+        IMPORTANT: Career questions should ALWAYS use answer_career_question, not handle_off_topic.{memory_context}
         """
         
         response = self.client.chat.completions.create(
@@ -274,10 +264,10 @@ class IntentClassifier:
             return self._simple_fallback_classification(user_input)
     
     def _simple_fallback_classification(self, user_input):
-        """Simple rule-based fallback classification."""
+        """Improved rule-based fallback classification."""
         user_input_lower = user_input.strip().lower()
         
-        # PRIORITY: Check for personal information FIRST (even if combined with greetings)
+        # PRIORITY 1: Check for personal information FIRST
         personal_patterns = [
             (r'(?:hello|hi|hey)?\s*my name is ([a-zA-Z\s]+)', 'name'),
             (r'(?:hello|hi|hey)?\s*i am ([a-zA-Z\s]+)', 'name'),
@@ -298,78 +288,85 @@ class IntentClassifier:
                 else:
                     info_value = match.group(1).strip()
                     if info_type == 'name':
-                        info_value = info_value.title()  # Capitalize name properly
+                        info_value = info_value.title()
                 
                 return {
                     'intent': 'store_personal_info',
                     'args': {'info_type': info_type, 'info_value': info_value}
                 }
         
-        # Check for greetings (only if no personal info was found)
-        greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']
-        if any(re.search(rf'\b{greeting}\b', user_input_lower) for greeting in greetings):
-            return {'intent': 'handle_greeting', 'args': {'greeting': user_input}}
+        # PRIORITY 2: Check for simple greetings (only if no personal info)
+        greeting_patterns = [r'\b(hello|hi|hey|good morning|good afternoon|good evening)\b']
+        if any(re.search(pattern, user_input_lower) for pattern in greeting_patterns):
+            # Make sure it's ONLY a greeting, not combined with other requests
+            if len(user_input.split()) <= 3:  # Simple greeting
+                return {'intent': 'handle_greeting', 'args': {'greeting': user_input}}
         
-        # Check for farewells
-        farewells = ['goodbye', 'bye', 'see you', 'thanks', 'thank you']
-        if any(farewell in user_input_lower for farewell in farewells):
-            return {'intent': 'handle_goodbye', 'args': {'farewell': user_input}}
+        # PRIORITY 3: Check for farewells
+        farewell_patterns = [r'\b(goodbye|bye|see you|thanks|thank you)\b']
+        if any(re.search(pattern, user_input_lower) for pattern in farewell_patterns):
+            if len(user_input.split()) <= 3:  # Simple farewell
+                return {'intent': 'handle_goodbye', 'args': {'farewell': user_input}}
         
-        # Check for URLs
+        # PRIORITY 4: Check for simple confirmations/rejections
+        confirmation_words = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'of course']
+        if (user_input_lower.strip() in confirmation_words or 
+            user_input_lower in ['yes please', 'sounds good', 'that works']):
+            return {'intent': 'handle_confirmation', 'args': {'confirmation': user_input}}
+        
+        simple_rejections = ['no', 'nope', 'no thanks', 'not interested', 'not really', 'no thank you']
+        if (user_input_lower.strip() in simple_rejections and len(user_input.split()) <= 3):
+            return {'intent': 'handle_rejection', 'args': {'rejection': user_input}}
+        
+        # PRIORITY 5: Check for URLs
         if is_valid_url(user_input):
             return {'intent': 'process_job_url', 'args': {'url': user_input}}
         
-        # Check for questions about personal info
-        personal_questions = ['what is my name', 'what job am i looking for', 'who am i']
+        # PRIORITY 6: Check for long job descriptions
+        job_indicators = ['responsibilities', 'duties', 'qualifications', 'requirements']
+        if (len(user_input.split()) > 50 and 
+            any(word in user_input_lower for word in job_indicators)):
+            return {'intent': 'process_job_description', 'args': {'job_description': user_input}}
+        
+        # PRIORITY 7: Check for questions about personal info
+        personal_questions = ['what is my name', 'what job am i looking for', 'who am i', 'what is my email']
         if any(q in user_input_lower for q in personal_questions):
             return {'intent': 'answer_career_question', 'args': {'question': user_input}}
         
-        # IMPROVED: Check for career-related requests (this was missing!)
-        career_keywords = [
-            'resume', 'cv', 'objective', 'summary', 'mission statement', 'professional profile',
-            'cover letter', 'job application', 'interview', 'career', 'skills', 'experience',
-            'qualifications', 'achievements', 'work history', 'professional', 'statement',
-            'help me', 'create', 'write', 'build', 'develop'
-        ]
+        # PRIORITY 8: Check for specific resume section requests
+        resume_sections = ['summary', 'objective', 'experience', 'skills', 'education', 'projects']
+        section_keywords = ['rewrite', 'redo', 'change', 'update', 'revise', 'remake']
         
-        # If any career keyword is found, it's likely a career question
-        if any(keyword in user_input_lower for keyword in career_keywords):
-            return {'intent': 'answer_career_question', 'args': {'question': user_input}}
-        
-        # Check for job description (long text with job-related keywords)
-        job_indicators = ['job description', 'responsibilities', 'requirements', 'qualifications']
-        if len(user_input.split()) > 50 and any(word in user_input_lower for word in ['responsibilities', 'duties', 'qualifications']):
-            return {'intent': 'process_job_description', 'args': {'job_description': user_input}}
-
-        # Check for completely off-topic (non-career) requests
-        off_topic_keywords = ['weather', 'sports', 'cooking', 'movie', 'music', 'game', 'food', 'travel']
-        if any(keyword in user_input_lower for keyword in off_topic_keywords):
-            return {'intent': 'handle_off_topic', 'args': {'off_topic_query': user_input}}
-        
-        confirmations = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'of course', 'please do', 'go ahead']
-        if user_input_lower.strip() in confirmations:
-            return {'intent': 'handle_confirmation', 'args': {'confirmation': user_input}}
-
-        rejections = ['no', 'not interested', 'no thanks', 'nope', 'not really', 'not at this time']
-        if user_input_lower.strip() in rejections:
-            return {'intent': 'handle_rejection', 'args': {'rejection': user_input}}
-        
-        resume_rewrite_keywords = ['redo', 'remake', 'rewrite', 'revise', 'change', 'edit']
-        resume_sections = ['summary', 'objective', 'experience', 'skills', 'education', 'projects', 'achievements']
-
-        for keyword in resume_rewrite_keywords:
-            for section in resume_sections:
+        for section in resume_sections:
+            for keyword in section_keywords:
                 if keyword in user_input_lower and section in user_input_lower:
                     return {
                         'intent': 'rewrite_resume_section',
                         'args': {'section': section}
                     }
         
-        if any(word in user_input_lower for word in resume_rewrite_keywords):
+        # PRIORITY 9: Check for career-related keywords (be more specific but inclusive)
+        specific_career_keywords = [
+            'resume', 'cv', 'cover letter', 'job application', 'interview',
+            'career advice', 'professional summary', 'work experience',
+            'pages', 'sections', 'should i', 'better to', 'make me',
+            'help me', 'create', 'write', 'build'
+        ]
+        
+        if any(keyword in user_input_lower for keyword in specific_career_keywords):
             return {'intent': 'answer_career_question', 'args': {'question': user_input}}
-
-
-        # Default to career question (assume career-related unless clearly off-topic)
+        
+        # PRIORITY 10: Check for clearly off-topic requests
+        off_topic_keywords = ['weather', 'sports', 'cooking', 'movie', 'music', 'recipe', 'game']
+        if any(keyword in user_input_lower for keyword in off_topic_keywords):
+            return {'intent': 'handle_off_topic', 'args': {'off_topic_query': user_input}}
+        
+        # DEFAULT: Check if it's a question - if so, assume career-related
+        question_indicators = ['how', 'what', 'when', 'where', 'why', 'should', 'can', '?']
+        if any(indicator in user_input_lower for indicator in question_indicators):
+            return {'intent': 'answer_career_question', 'args': {'question': user_input}}
+        
+        # Final fallback - if it seems like a request or statement, assume career-related
         return {'intent': 'answer_career_question', 'args': {'question': user_input}}
 
 def get_system_prompt():
