@@ -404,7 +404,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   }
 };
 
- const handleSendMessage = async () => {
+const handleSendMessage = async () => {
   if (!inputMessage.trim() && !selectedFile) return;
 
   const userMessage = {
@@ -442,11 +442,27 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
 
   try {
     // Check what type of content we're sending
-    if (selectedFile) {
-      // Handle file upload
+    if (selectedFile && originalMessage.trim()) {
+      // BOTH file and text message - handle file first, then send follow-up text
+      console.log("Processing both file and text message");
+      
+      // First, handle the file upload
       await handleFIleSend(aiResponseId);
-    } else {
-      // Handle text message with streaming
+      
+      // Then, create a new AI response for the text message
+      const textResponseId = Date.now() + 2;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: textResponseId,
+          text: 'Processing your additional question...',
+          sender: 'ai',
+          time: formatTime(),
+          isStreaming: true
+        }
+      ]);
+      
+      // Handle the text message
       const response = await fetch(`${API_BASE}/api/chat-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -457,10 +473,8 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
       });
 
       if (response.ok && response.body) {
-        // Handle streaming response
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-       
         let accumulatedText = ''; 
 
         while (true) {
@@ -470,7 +484,51 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
           const chunk = decoder.decode(value, { stream: true });
           accumulatedText += chunk; 
 
-          // Update frontend with partial stream
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === textResponseId 
+                ? { ...msg, text: accumulatedText, isStreaming: true } 
+                : msg
+            )
+          );
+        }
+
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === textResponseId 
+              ? { ...msg, text: accumulatedText || '[Empty Response]', isStreaming: false } 
+              : msg
+          )
+        );
+      }
+      
+    } else if (selectedFile) {
+      // Only file - existing logic
+      await handleFIleSend(aiResponseId);
+      
+    } else if (originalMessage.trim()) {
+      // Only text message - existing logic
+      const response = await fetch(`${API_BASE}/api/chat-stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          message: originalMessage, 
+          session_id: currentSessionId 
+        })
+      });
+
+      if (response.ok && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedText = ''; 
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          accumulatedText += chunk; 
+
           setMessages(prev =>
             prev.map(msg =>
               msg.id === aiResponseId 
@@ -480,7 +538,6 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
           );
         }
 
-        // Finalize the message
         setMessages(prev =>
           prev.map(msg =>
             msg.id === aiResponseId 
@@ -488,13 +545,11 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
               : msg
           )
         );
-      
-        // For streaming, we need to get session_id from response headers or handle differently
-        // Check if your streaming endpoint returns session_id in headers
+        
         await fetchRateLimitInfo();
 
       } else {
-        // Fall back to regular API call
+        // Fallback to regular API call
         console.log('Streaming failed, trying regular API...');
         const fallbackResponse = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
@@ -511,14 +566,12 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
 
         const data = await fallbackResponse.json();
         
-        // Update session ID if provided and use it immediately
         if (data.session_id) {
           currentSessionId = data.session_id;
           setSessionId(data.session_id);
           console.log("Received new session_id from backend:", currentSessionId);
         }
 
-        // Update the message with the response
         setMessages(prev =>
           prev.map(msg =>
             msg.id === aiResponseId 
@@ -531,16 +584,14 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
           )
         );
         
-        // Use the fresh session ID for rate limit check
         await fetchRateLimitInfo(currentSessionId);
       }
-    } // <- This closes the else block
+    }
 
   } catch (error) {
     console.error('Error in handleSendMessage:', error);
     setConnectionError(true);
 
-    // Show error message
     const errorMessage = connectionError 
       ? `Connection error: ${error.message}\n\nPlease check that your backend server is running on ${API_BASE}`
       : `Sorry, I encountered an error: ${error.message}`;
