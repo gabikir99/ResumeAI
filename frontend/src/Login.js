@@ -40,7 +40,8 @@ const Login = ({ onSwitchToRegister, onLoginSuccess, onClose }) => {
       
     <div className="login-container">
       <div className="login-modal">
-        <h1>Welcome! Please login to the app</h1>
+        <h1>Welcome!</h1>
+      <p>Please login to the app</p>
         <form onSubmit={handleLogin}>
           <input
             type="email"

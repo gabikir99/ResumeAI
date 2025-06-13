@@ -99,6 +99,21 @@ def rate_limit_check(f):
     
     return wrapper
 
+def stream_response_with_delay(text, chunk_size=5):
+    """
+    Stream a response with artificial delay to simulate typing.
+    Splits text into words and yields them with small delays.
+    """
+    import time
+    words = text.split()
+    
+    for i in range(0, len(words), chunk_size):
+        chunk = ' '.join(words[i:i + chunk_size])
+        if i > 0:  # Add space between chunks (except first)
+            chunk = ' ' + chunk
+        yield chunk
+        time.sleep(0.1)  # Small delay between chunks
+
 def get_memory_manager(session_id=None):
     """Get or create a memory manager for the given session ID."""
     if not session_id:
@@ -202,39 +217,46 @@ def chat_stream():
     if not user_input:
         return jsonify({'error': 'No message provided'}), 400
     
-    # Get or create memory manager for this session
     memory_manager, session_id = get_memory_manager(session_id)
 
     @stream_with_context
     def generate():
         try:
-            # Check if user has reached message limit
             limit_status = rate_limiter.get_session_stats(session_id)
             if not limit_status['allowed']:
                 reset_time = limit_status['reset_time'].strftime('%Y-%m-%d %H:%M:%S')
-                yield f"You've reached the limit of {limit_status['limit']} messages. Please wait until {reset_time} for your limit to reset, or start a new session."
+                response_text = f"You've reached the limit of {limit_status['limit']} messages. Please wait until {reset_time} for your limit to reset, or start a new session."
+                
+                # Stream even the rate limit message
+                for chunk in stream_response_with_delay(response_text):
+                    yield chunk
                 return
                 
             intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
             full_response = ""
 
-            # FIXED: Use the improved handle_intent function
-            # Check if GPT service has streaming capability
-            if hasattr(gpt_service, 'generate_streaming_response'):
-                # Stream the response if available
+            # Check if we have a streaming response from GPT service
+            try:
+                # Try to get streaming response first
                 for chunk in gpt_service.generate_streaming_response(intent_info, memory_manager, user_input):
                     full_response += chunk
                     yield chunk
-            else:
-                # Fallback to non-streaming response
+            except Exception as streaming_error:
+                print(f"Streaming failed, using fallback: {streaming_error}")
+                # Fallback to non-streaming with artificial delay
                 response = handle_intent(intent_info, memory_manager, user_input)
                 full_response = response
-                yield response
+                
+                # Stream the complete response with artificial delay
+                for chunk in stream_response_with_delay(response):
+                    yield chunk
 
             memory_manager.add_message(user_input, full_response)
 
         except Exception as e:
-            yield f"[Error: {str(e)}]"
+            error_message = f"[Error: {str(e)}]"
+            for chunk in stream_response_with_delay(error_message):
+                yield chunk
 
     return Response(generate(), 
                     mimetype='text/plain',

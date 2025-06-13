@@ -333,7 +333,98 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
     }
   };
 
- const handleFIleSend = async (responseId) => {
+ const simulateTyping = (text, messageId, delay = 30) => {
+  return new Promise((resolve) => {
+    let currentIndex = 0;
+    const words = text.split(' ');
+    
+    const typeNextWord = () => {
+      if (currentIndex < words.length) {
+        const currentText = words.slice(0, currentIndex + 1).join(' ');
+        
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === messageId 
+              ? { ...msg, text: currentText, isStreaming: true } 
+              : msg
+          )
+        );
+        
+        currentIndex++;
+        setTimeout(typeNextWord, delay);
+      } else {
+        // Finished typing
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === messageId 
+              ? { ...msg, text: text, isStreaming: false } 
+              : msg
+          )
+        );
+        resolve();
+      }
+    };
+    
+    typeNextWord();
+  });
+};
+const handleStreamingResponse = async (response, messageId) => {
+  if (response.body) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedText = '';
+    let chunkCount = 0;
+
+    try {
+      // Collect all chunks
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        chunkCount++;
+        const chunk = decoder.decode(value, { stream: true });
+        accumulatedText += chunk;
+      }
+
+      if (accumulatedText.trim()) {
+        const wordCount = accumulatedText.trim().split(' ').length;
+        
+        // Force typing simulation for responses with less than 50 words or single chunks
+        if (wordCount < 50 || chunkCount === 1) {
+          console.log(`🎯 Using typing simulation (${wordCount} words, ${chunkCount} chunks)`);
+          await simulateTyping(accumulatedText.trim(), messageId, 35);
+        } else {
+          console.log(`⚡ Using instant display (${wordCount} words, ${chunkCount} chunks)`);
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === messageId 
+                ? { ...msg, text: accumulatedText.trim(), isStreaming: false } 
+                : msg
+            )
+          );
+        }
+        return accumulatedText;
+      }
+    } catch (streamError) {
+      console.log('❌ Streaming failed:', streamError);
+    }
+  }
+
+  // Fallback
+  try {
+    const fullResponse = await response.text();
+    if (fullResponse.trim()) {
+      await simulateTyping(fullResponse.trim(), messageId, 35);
+      return fullResponse;
+    }
+  } catch (textError) {
+    console.log("❌ Failed to get text response:", textError);
+  }
+
+  return '';
+};
+
+const handleFIleSend = async (responseId) => {
   if (!selectedFile) {
     console.error("No file selected");
     return;
@@ -352,15 +443,12 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
     }); 
 
     console.log("Response status:", response.status);
-    console.log("Response status text:", response.statusText);
 
-    // Check if response is ok first
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Upload failed with status: ${response.status} - ${errorText}`);
     }
 
-    // Only parse as JSON if response is ok
     const result = await response.json(); 
     console.log("File upload result:", result);
 
@@ -370,18 +458,9 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
       console.log("Updated session_id from file upload:", result.session_id);
     }
 
-    // Update the AI response with the result
-    setMessages(prev =>
-      prev.map(msg =>
-        msg.id === responseId
-          ? { 
-              ...msg, 
-              text: result.response || result.message || 'File uploaded successfully', 
-              isStreaming: false 
-            } 
-          : msg
-      )
-    );
+    // Use typing simulation for file upload response
+    const responseText = result.response || result.message || 'File uploaded successfully';
+    await simulateTyping(responseText, responseId, 20); // Slightly faster for file responses
 
     // Update rate limit info
     await fetchRateLimitInfo();
@@ -441,12 +520,11 @@ const handleSendMessage = async () => {
   console.log("Sending with session_id", currentSessionId);
 
   try {
-    // Check what type of content we're sending
     if (selectedFile && originalMessage.trim()) {
-      // BOTH file and text message - handle file first, then send follow-up text
+      // BOTH file and text message
       console.log("Processing both file and text message");
       
-      // First, handle the file upload
+      // First, handle the file upload (this has its own response handling)
       await handleFIleSend(aiResponseId);
       
       // Then, create a new AI response for the text message
@@ -462,7 +540,7 @@ const handleSendMessage = async () => {
         }
       ]);
       
-      // Handle the text message
+      // Handle the text message with streaming/typing simulation
       const response = await fetch(`${API_BASE}/api/chat-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -472,42 +550,18 @@ const handleSendMessage = async () => {
         })
       });
 
-      if (response.ok && response.body) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let accumulatedText = ''; 
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          accumulatedText += chunk; 
-
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === textResponseId 
-                ? { ...msg, text: accumulatedText, isStreaming: true } 
-                : msg
-            )
-          );
-        }
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === textResponseId 
-              ? { ...msg, text: accumulatedText || '[Empty Response]', isStreaming: false } 
-              : msg
-          )
-        );
+      if (response.ok) {
+        await handleStreamingResponse(response, textResponseId);
+      } else {
+        throw new Error(`API request failed with status: ${response.status}`);
       }
       
     } else if (selectedFile) {
-      // Only file - existing logic
+      // Only file - use existing file handler with typing simulation
       await handleFIleSend(aiResponseId);
       
     } else if (originalMessage.trim()) {
-      // Only text message - existing logic
+      // Only text message
       const response = await fetch(`${API_BASE}/api/chat-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -517,37 +571,9 @@ const handleSendMessage = async () => {
         })
       });
 
-      if (response.ok && response.body) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let accumulatedText = ''; 
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          accumulatedText += chunk; 
-
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === aiResponseId 
-                ? { ...msg, text: accumulatedText, isStreaming: true } 
-                : msg
-            )
-          );
-        }
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiResponseId 
-              ? { ...msg, text: accumulatedText || '[Empty Response]', isStreaming: false } 
-              : msg
-          )
-        );
-        
+      if (response.ok) {
+        const responseText = await handleStreamingResponse(response, aiResponseId);
         await fetchRateLimitInfo();
-
       } else {
         // Fallback to regular API call
         console.log('Streaming failed, trying regular API...');
@@ -572,18 +598,8 @@ const handleSendMessage = async () => {
           console.log("Received new session_id from backend:", currentSessionId);
         }
 
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === aiResponseId 
-              ? { 
-                  ...msg, 
-                  text: data.response || 'Sorry, I couldn\'t generate a response.', 
-                  isStreaming: false 
-                } 
-              : msg
-          )
-        );
-        
+        // Use typing simulation for fallback response too
+        await simulateTyping(data.response || 'Sorry, I couldn\'t generate a response.', aiResponseId);
         await fetchRateLimitInfo(currentSessionId);
       }
     }
