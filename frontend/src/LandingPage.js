@@ -413,7 +413,7 @@ const handleStreamingResponse = async (response, messageId) => {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let accumulatedText = '';
-    let chunkCount = 0;
+    
 
     try {
       // Collect all chunks
@@ -421,30 +421,28 @@ const handleStreamingResponse = async (response, messageId) => {
         const { value, done } = await reader.read();
         if (done) break;
 
-        chunkCount++;
+        
         const chunk = decoder.decode(value, { stream: true });
         accumulatedText += chunk;
-      }
-
-      if (accumulatedText.trim()) {
-        const wordCount = accumulatedText.trim().split(' ').length;
         
-        // Force typing simulation for responses with less than 50 words or single chunks
-        if (wordCount < 50 || chunkCount === 1) {
-          console.log(`🎯 Using typing simulation (${wordCount} words, ${chunkCount} chunks)`);
-          await simulateTyping(accumulatedText.trim(), messageId, 35);
-        } else {
-          console.log(`⚡ Using instant display (${wordCount} words, ${chunkCount} chunks)`);
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === messageId 
-                ? { ...msg, text: accumulatedText.trim(), isStreaming: false } 
-                : msg
-            )
-          );
-        }
-        return accumulatedText;
+        // Use a function to update with the latest accumulatedText
+        const currentText = accumulatedText; // Create a stable reference
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, text: currentText, isStreaming: true }
+              : msg
+          )
+        );
       }
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === messageId
+            ? { ...msg, text: accumulatedText.trim(), isStreaming: false }
+            : msg
+        )
+      );
+      return accumulatedText.trim();
     } catch (streamError) {
       console.log('❌ Streaming failed:', streamError);
     }
@@ -458,7 +456,7 @@ const handleStreamingResponse = async (response, messageId) => {
       return fullResponse;
     }
   } catch (textError) {
-    console.log("❌ Failed to get text response:", textError);
+    console.log('❌ Failed to get text response:', textError);
   }
 
   return '';

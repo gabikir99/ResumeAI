@@ -386,7 +386,7 @@ def chat_stream():
                     headers={
                         'Cache-Control': 'no-cache',
                         'X-Accel-Buffering': 'no',
-                        'Transfer-Control': 'chunked'
+                        'Transfer-Encoding': 'chunked'
                     })
 
 @app.route('/api/rate-limit/status', methods=['GET'])
