@@ -164,8 +164,22 @@ def handle_intent(intent_info, memory_manager, original_input):
         
     elif intent == 'answer_career_question':
         return gpt_service.chat_about_resumes(
-            args['question'], 
-            memory_manager.get_user_info(), 
+            args['question'],
+            memory_manager.get_user_info(),
+            memory_manager.get_chat_history()
+        )
+    
+    elif intent == 'answer_yes_no_question':
+        return gpt_service.chat_about_resumes(
+            f"{args['question']}\n\nPlease answer in one word: yes or no.",
+            memory_manager.get_user_info(),
+            memory_manager.get_chat_history()
+        )
+
+    elif intent == 'answer_with_user_instuctions':
+        return gpt_service.chat_about_resumes(
+            f"{args['question']}\n\nPlease answer using this style: {args['style']}.",
+            memory_manager.get_user_info(),
             memory_manager.get_chat_history()
         )
         

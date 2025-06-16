@@ -74,6 +74,14 @@ class GPTService:
         elif intent == 'answer_career_question':
             yield from self.chat_about_resumes_stream(args['question'], user_info, chat_history)
             
+        elif intent == 'answer_yes_no_question':
+            prompt = f"{args['question']}\n\nPlease answer in one word: yes or no."
+            yield from self.chat_about_resumes_stream(prompt, user_info, chat_history)
+
+        elif intent == 'answer_with_user_instuctions':
+            prompt = f"{args['question']}\n\nPlease answer using this style: {args['style']}."
+            yield from self.chat_about_resumes_stream(prompt, user_info, chat_history)
+            
         else:
             # Default to chat_about_resumes for unknown intents
             yield from self.chat_about_resumes_stream(user_input, user_info, chat_history)

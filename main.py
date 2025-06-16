@@ -220,11 +220,33 @@ def _handle_intent(intent_info, gpt_service, response_handlers, memory_manager, 
     elif intent == 'answer_career_question':
         print("\n", end="")
         response = gpt_service.chat_about_resumes(
-            args['question'], 
+            args['question'],
             memory_manager.get_user_info(), 
             memory_manager.get_chat_history()
         )
         # FIXED: Actually print the response!
+        if response:
+            print_streaming(response)
+        return response
+    
+    elif intent == 'answer_yes_no_question':
+        print("\n", end="")
+        response = gpt_service.chat_about_resumes(
+            f"{args['question']}\n\nPlease answer in one word: yes or no.",
+            memory_manager.get_user_info(),
+            memory_manager.get_chat_history()
+        )
+        if response:
+            print_streaming(response)
+        return response
+
+    elif intent == 'answer_with_user_instuctions':
+        print("\n", end="")
+        response = gpt_service.chat_about_resumes(
+            f"{args['question']}\n\nPlease answer using this style: {args['style']}.",
+            memory_manager.get_user_info(),
+            memory_manager.get_chat_history()
+        )
         if response:
             print_streaming(response)
         return response

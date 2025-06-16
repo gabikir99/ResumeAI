@@ -171,6 +171,29 @@ INTENT_FUNCTIONS = [
         }
     },
     {
+        "name": "answer_yes_no_question",
+        "description": "Answer a question with a single word: yes or no",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The question to answer"}
+            },
+            "required": ["question"]
+        }
+    },
+    {
+        "name": "answer_with_user_instuctions",
+        "description": "Answer a question following specific user instructions",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The question to answer"},
+                "style": {"type": "string", "description": "The user requested answer style"}
+            },
+            "required": ["question", "style"]
+        }
+    },
+    {
     "name": "rewrite_resume_section",
     "description": "Rewrite or regenerate a specific resume section",
     "parameters": {
@@ -231,7 +254,11 @@ class IntentClassifier:
 
         8. **handle_confirmation/rejection** - For simple yes/no responses
 
-        9. **rewrite_resume_section** - For requests to rewrite specific resume sections
+        9. **answer_yes_no_question** - When the user explicitly wants a yes or no answer
+
+        10. **answer_with_user_instuctions** - When the user requests a specific answer style or format
+
+        11. **rewrite_resume_section** - For requests to rewrite specific resume sections
 
         Priority: Personal info > Greetings/Goodbyes > Career questions > Off-topic
         
@@ -336,7 +363,30 @@ class IntentClassifier:
         if any(q in user_input_lower for q in personal_questions):
             return {'intent': 'answer_career_question', 'args': {'question': user_input}}
         
-        # PRIORITY 8: Check for specific resume section requests
+        # PRIORITY 8: Check for requests to answer only yes or no
+        if 'yes or no' in user_input_lower and '?' in user_input_lower:
+            return {'intent': 'answer_yes_no_question', 'args': {'question': user_input}}
+
+        # PRIORITY 9: Check for requests specifying an answer style
+        style_mappings = [
+            ('bullet', 'bullet points'),
+            ('one sentence', 'one sentence'),
+            ('two sentences', 'two sentences'),
+            ('one word', 'one word'),
+            ('one line', 'one line'),
+            ('two paragraphs', 'two paragraphs'),
+            ('short answer', 'short answer'),
+            ('brief answer', 'brief answer')
+        ]
+
+        for keyword, style in style_mappings:
+            if keyword in user_input_lower and ('answer' in user_input_lower or 'respond' in user_input_lower):
+                return {
+                    'intent': 'answer_with_user_instuctions',
+                    'args': {'question': user_input, 'style': style}
+                }
+
+        # PRIORITY 10: Check for specific resume section requests
         resume_sections = ['summary', 'objective', 'experience', 'skills', 'education', 'projects', 'certifications', 'awards', 'volunteer']
         section_keywords = ['rewrite', 'redo', 'change', 'update', 'revise', 'remake']
         
@@ -348,7 +398,7 @@ class IntentClassifier:
                         'args': {'section': section}
                     }
         
-        # PRIORITY 9: Check for career-related keywords (be more specific but inclusive)
+        # PRIORITY 11: Check for career-related keywords (be more specific but inclusive)
         specific_career_keywords = [
             'resume', 'cv', 'cover letter', 'job application', 'interview',
             'career advice', 'professional summary', 'work experience',
@@ -360,7 +410,7 @@ class IntentClassifier:
         if any(keyword in user_input_lower for keyword in specific_career_keywords):
             return {'intent': 'answer_career_question', 'args': {'question': user_input}}
         
-        # PRIORITY 10: Check for clearly off-topic requests
+        # PRIORITY 12: Check for clearly off-topic requests
         off_topic_keywords = ['weather', 'sports', 'cooking', 'movie', 'music', 'recipe', 'game']
         if any(keyword in user_input_lower for keyword in off_topic_keywords):
             return {'intent': 'handle_off_topic', 'args': {'off_topic_query': user_input}}
