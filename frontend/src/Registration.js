@@ -60,57 +60,77 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Store user data
-      const userData = {
-        id: Date.now(),
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        registeredAt: new Date().toISOString()
-      };
-      
-      // Use sessionStorage instead of localStorage
-      sessionStorage.setItem('registeredUser', JSON.stringify(userData));
-      try {
-  const res = await fetch('http://localhost:5000/api/session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'new' })
-  });
-
-  const data = await res.json();
-  if (data.session_id) {
-    sessionStorage.setItem('session_id', data.session_id);
-  }
-} catch (e) {
-  console.error('Session creation failed:', e);
-}
-      
-      // Call success callback
-      onSignupSuccess({
-        name: userData.name,
-        email: userData.email
+      // Send registration data to your Flask backend
+      const response = await fetch('http://localhost:5000/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword
+        })
       });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Registration successful
+        console.log('Registration successful:', data.user);
+        
+        // Create session after successful registration
+        try {
+          const sessionRes = await fetch('http://localhost:5000/api/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'new' })
+          });
+
+          const sessionData = await sessionRes.json();
+          if (sessionData.session_id) {
+            // Store session ID but NOT user data in sessionStorage
+            sessionStorage.setItem('session_id', sessionData.session_id);
+            // Optionally store just the user ID for session management
+            sessionStorage.setItem('user_id', data.user.id.toString());
+          }
+        } catch (e) {
+          console.error('Session creation failed:', e);
+        }
+        
+        // Call success callback with user data
+        onSignupSuccess({
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email
+        });
+      } else {
+        // Registration failed
+        setErrors({ submit: data.message || 'Registration failed. Please try again.' });
+      }
     } catch (error) {
-      setErrors({ submit: 'Registration failed. Please try again.' });
+      console.error('Registration error:', error);
+      setErrors({ 
+        submit: 'Unable to connect to server. Please check your internet connection and try again.' 
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className='modal-overlay'>
-       
-     <div className="registration-container">
-      <div className="registration-modal">
-        <div className="modal-header">
-          <h1>Create Account</h1>
-          <p>Join us today and get started</p>
-        </div>
-        <form onSubmit={handleSubmit} className="modal-form">
+    <div className="modal-overlay">
+      <div className="registration-container">
+        <div className="registration-modal">
+          <button className="close-btn" onClick={onClose}>&times;</button>
+          
+          <div className="modal-header">
+            <h1>Create Account</h1>
+            <p>Join us today and get started</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
             <label htmlFor="name">Full Name</label>
             <input
@@ -121,9 +141,8 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
               onChange={handleInputChange}
               className={errors.name ? 'error' : ''}
               placeholder="Enter your full name"
-              required
             />
-            {errors.name && <p className="error-text">{errors.name}</p>}
+            {errors.name && <span className="error-text">{errors.name}</span>}
           </div>
 
           <div className="form-group">
@@ -136,9 +155,8 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
               onChange={handleInputChange}
               className={errors.email ? 'error' : ''}
               placeholder="Enter your email"
-              required
             />
-            {errors.email && <p className="error-text">{errors.email}</p>}
+            {errors.email && <span className="error-text">{errors.email}</span>}
           </div>
 
           <div className="form-group">
@@ -151,9 +169,8 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
               onChange={handleInputChange}
               className={errors.password ? 'error' : ''}
               placeholder="Create a password"
-              required
             />
-            {errors.password && <p className="error-text">{errors.password}</p>}
+            {errors.password && <span className="error-text">{errors.password}</span>}
           </div>
 
           <div className="form-group">
@@ -166,27 +183,38 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
               onChange={handleInputChange}
               className={errors.confirmPassword ? 'error' : ''}
               placeholder="Confirm your password"
-              required
             />
-            {errors.confirmPassword && <p className="error-text">{errors.confirmPassword}</p>}
+            {errors.confirmPassword && <span className="error-text">{errors.confirmPassword}</span>}
           </div>
 
-          {errors.submit && <div className="submit-error">{errors.submit}</div>}
+          {errors.submit && (
+            <div className="error-text submit-error">{errors.submit}</div>
+          )}
 
-          <button type="submit" disabled={isLoading} className="submit-button">
+          <button 
+            type="submit" 
+            className="submit-button"
+            disabled={isLoading}
+          >
             {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
-          <button type='button' onClick={onSwitchToLogin} className='login-button'>
-            Already have an account? Login
-          </button>
         </form>
-        <button className='close-btn' onClick={onClose}>X</button>
-      </div>
-       
-    </div>
-    </div>
-    
 
+        <div className="auth-footer">
+          <p>Already have an account? 
+            <button 
+              type="button" 
+              className="link-btn" 
+              onClick={onSwitchToLogin}
+            >
+              Sign In
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
   );
 };
-export default Registration; 
+
+export default Registration;

@@ -46,16 +46,23 @@ const MarkdownRenderer = ({ text }) => {
   );
 };
 
-// Feedback Modal Component
+
 const FeedbackModal = ({ isOpen, onClose, onSubmit, externalSuccess, setExternalSuccess }) => {
   const [feedback, setFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const textareaRef = useRef(null);
 
   useEffect(() => {
+    if (externalSuccess) {
+      setSubmitted(true);
+      setExternalSuccess(false);
+    }
+  }, [externalSuccess, setExternalSuccess]);
+
+  useEffect(() => {
     if (isOpen && textareaRef.current) {
-      textareaRef.current.focus();
+      setTimeout(() => textareaRef.current.focus(), 100);
     }
   }, [isOpen]);
 
@@ -64,16 +71,10 @@ const FeedbackModal = ({ isOpen, onClose, onSubmit, externalSuccess, setExternal
     if (!feedback.trim()) return;
 
     setIsSubmitting(true);
-    
     try {
-      // Simulate API call
       await onSubmit(feedback);
-      setIsSuccess(true);
-      setTimeout(() => {
-        setIsSuccess(false);
-        setFeedback('');
-        onClose();
-      }, 2000);
+      setSubmitted(true);
+      setFeedback('');
     } catch (error) {
       console.error('Failed to submit feedback:', error);
     } finally {
@@ -82,34 +83,31 @@ const FeedbackModal = ({ isOpen, onClose, onSubmit, externalSuccess, setExternal
   };
 
   const handleClose = () => {
-    if (!isSubmitting) {
-      setFeedback('');
-      setIsSuccess(false);
-      onClose();
-    }
+    setFeedback('');
+    setSubmitted(false);
+    setIsSubmitting(false);
+    onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="feedback-modal-overlay" onClick={handleClose}>
-      <div className="feedback-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="feedback-modal-overlay">
+      <div className="feedback-modal">
         <div className="feedback-modal-header">
           <div className="feedback-modal-title">
-            <span className="feedback-icon">💭</span>
-            <h3>Share Your Feedback</h3>
+            <h3>We'd Love Your Feedback</h3>
           </div>
-          <button 
-            className="feedback-close-btn"
+          <button
             onClick={handleClose}
-            disabled={isSubmitting}
+            className="feedback-close-btn"
           >
             ×
           </button>
         </div>
-
+        
         <div className="feedback-modal-content">
-          {isSuccess ? (
+          {submitted ? (
             <div className="feedback-success">
               <div className="success-icon">✅</div>
               <h4>Thank you for your feedback!</h4>
@@ -167,7 +165,7 @@ const FeedbackModal = ({ isOpen, onClose, onSubmit, externalSuccess, setExternal
       </div>
     </div>
   );
-};
+}
 
 // Landing Page Component
 const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickSignup, onLogout }) => {
@@ -182,10 +180,52 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   const [connectionError, setConnectionError] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const messagesEndRef = useRef(null);
+  const [openFAQIndex, setOpenFAQIndex] = useState(null);
   const inputRef = useRef(null);
+  const [isAuthMenuOpen, setIsAuthMenuOpen] = useState(false);
   const fileInputRef = useRef(null);
   const [rateLimitInfo, setRateLimitInfo] = useState({ remaining: 50, total: 50 });
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+
+  const faqData = [
+    {
+      question: "How does ResumindAI's AI optimization work?",
+      answer: "Our AI assistant analyzes job descriptions using advanced natural language processing to understand exactly what employers are looking for. It then tailors your resume sections, keywords, and formatting to match those requirements, significantly increasing your chances of getting past ATS systems and catching recruiters' attention."
+    },
+    {
+      question: "Can ResumindAI help with all resume sections?",
+      answer: "Absolutely! Our AI can help optimize every part of your resume including professional summaries, work experience, skills sections, education, achievements, project highlights, and additional sections like volunteer work or certifications. Whether you need a complete rewrite or just want to polish specific areas, we've got you covered."
+    },
+    {
+      question: "How long does it take to optimize my resume?",
+      answer: "Most resume optimizations are completed in under 2 minutes! Simply chat with our AI assistant, share your current resume or background information, paste a job description or URL, and get instant, tailored suggestions. Our streamlined process means you can apply to multiple jobs quickly with customized resumes."
+    },
+    {
+      question: "Is ResumindAI suitable for recent graduates?",
+      answer: "Yes! ResumindAI is perfect for recent graduates who may lack extensive work experience. Our AI helps you highlight relevant coursework, projects, internships, and transferable skills in ways that appeal to employers. We also provide career advice and interview preparation tips specifically tailored to entry-level positions."
+    },
+    {
+      question: "What makes ResumindAI different from other resume tools?",
+      answer: "Unlike static templates or basic builders, ResumindAI provides intelligent, conversational assistance that adapts to your unique background and target roles. Our AI understands industry-specific requirements, maintains context throughout your session, and offers personalized career advice beyond just resume writing."
+    },
+    {
+      question: "Can I use ResumindAI for multiple job applications?",
+      answer: "Definitely! That's one of our core strengths. You can optimize your resume for different positions, industries, or companies by simply sharing new job descriptions with our AI. The system remembers your background information and quickly adapts your resume for each specific opportunity."
+    },
+    {
+      question: "Do you support different resume formats and lengths?",
+      answer: "Yes, our AI can help with various resume formats (chronological, functional, hybrid) and provides clear guidance on optimal length based on your experience level and industry. Whether you need a concise 1-page resume or a comprehensive 2-page format, we'll help you make the right choice."
+    },
+    {
+      question: "How does the chat interface work?",
+      answer: "Our chat interface is designed to feel like talking to a professional career advisor. You can ask questions naturally, share your background, upload documents, or paste job URLs. The AI maintains conversation context, provides streaming responses, and offers specific, actionable advice tailored to your career goals."
+    }
+  ];
+
+  const toggleFAQ = (index) => {
+    setOpenFAQIndex(openFAQIndex === index ? null : index);
+  };
+
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -818,6 +858,7 @@ const handleSendMessage = async () => {
               )}
             </div>
           </div>
+          
         </div>
 
         <FeedbackModal
@@ -851,12 +892,27 @@ const handleSendMessage = async () => {
       </button>
 
       <div className="main-content">
-        {!user && ( 
-          <div className='auth-buttons'>
-            <button className='auth-btn login' onClick={onClickLogin}>Login</button>
-            <button className='auth-btn' onClick={onClickSignup}>Sign up</button>
-          </div>
-        )}
+       {!user && ( 
+  <div className='auth-buttons'>
+    <div className={`auth-menu ${isAuthMenuOpen ? 'auth-menu-expanded' : ''}`}>
+      {isAuthMenuOpen && (
+        <>
+          <button className='auth-btn login' onClick={onClickLogin}>Login</button>
+          <button className='auth-btn' onClick={onClickSignup}>Sign up</button>
+            <a href='#faq' className='auth-btn login'>FAQ</a>
+        </>
+      )}
+      <button 
+        className='auth-toggle-btn' 
+        onClick={() => setIsAuthMenuOpen(!isAuthMenuOpen)}
+      >
+        <span className={`auth-toggle-icon ${isAuthMenuOpen ? 'rotated' : ''}`}>
+          {isAuthMenuOpen ? '×' : '☰'}
+        </span>
+      </button>
+    </div>
+  </div>
+)}
         {user && (
           <div className='auth-buttons'>
             <button className='auth-btn' onClick={onLogout}>Sign Out</button>
@@ -943,6 +999,64 @@ const handleSendMessage = async () => {
             {/* Floating Elements */}
             <div className="floating-element floating-element-1"></div>
             <div className="floating-element floating-element-2"></div>
+          </div>
+        </div>
+      </div>
+
+       {/* FAQ Section */}
+      <div id='faq' className="faq-section">
+        <div className="faq-container">
+          {/* Header */}
+          <div className="faq-header">
+            <div className="faq-badge">
+              ❓ Frequently Asked Questions
+            </div>
+            <h2 className="faq-title">
+              Everything You Need to Know About{' '}
+              <span className="faq-highlight">ResumindAI</span>
+            </h2>
+            <p className="faq-description">
+              Get answers to common questions about our AI-powered resume optimization platform
+            </p>
+          </div>
+
+          {/* FAQ Items */}
+          <div className="faq-list">
+            {faqData.map((faq, index) => (
+              <div 
+                key={index} 
+                className={`faq-item ${openFAQIndex === index ? 'faq-item-open' : ''}`}
+              >
+                <button
+                  className="faq-question-button"
+                  onClick={() => toggleFAQ(index)}
+                  aria-expanded={openFAQIndex === index}
+                >
+                  <span className="faq-question-text">{faq.question}</span>
+                  <div className="faq-icon">
+                    <div className={`faq-icon-line faq-icon-horizontal ${openFAQIndex === index ? 'faq-icon-rotate' : ''}`}></div>
+                    <div className={`faq-icon-line faq-icon-vertical ${openFAQIndex === index ? 'faq-icon-hide' : ''}`}></div>
+                  </div>
+                </button>
+                
+                <div className={`faq-answer-container ${openFAQIndex === index ? 'faq-answer-expanded' : ''}`}>
+                  <div className="faq-answer-content">
+                    <p className="faq-answer-text">{faq.answer}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA at bottom */}
+          <div className="faq-cta">
+            <div className="faq-cta-content">
+              <h3 className="faq-cta-title">Still have questions?</h3>
+              <p className="faq-cta-text">Start chatting with our AI assistant to get personalized help</p>
+              <button className="faq-cta-button" onClick={handleOpenChat}>
+                Start Your Resume Optimization →
+              </button>
+            </div>
           </div>
         </div>
       </div>

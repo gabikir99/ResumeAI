@@ -207,6 +207,129 @@ def handle_intent(intent_info, memory_manager, original_input):
             memory_manager.get_chat_history()
         )
 
+
+@app.route('/api/register', methods=['POST'])
+def register_user():
+    """API endpoint for user registration."""
+    try:
+        data = request.json
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        confirm_password = data.get('confirmPassword', '')
+        
+        # Import the database functions
+        from database import create_account
+        
+        # Use your existing database service to create the account
+        result = create_account(name, email, password, confirm_password)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'user': {
+                    'id': result['user']['id'],
+                    'name': result['user']['name'],
+                    'email': result['user']['email']
+                }
+            }), 201
+        else:
+            return jsonify({
+                'success': False,
+                'message': result.get('message', 'Registration failed')
+            }), 400
+            
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 400
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
+
+@app.route('/api/login', methods=['POST'])
+def login_user():
+    """API endpoint for user login."""
+    try:
+        data = request.json
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        email = data.get('email', '').strip()
+        password = data.get('password', '')
+        
+   
+        from database import login
+        
+        
+        result = login(email, password)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': result['message'],
+                'user': {
+                    'id': result['user']['id'],
+                    'name': result['user']['name'],
+                    'email': result['user']['email']
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': result['message']
+            }), 401
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
+    
+# Add this to your app.py file
+
+@app.route('/api/user/<int:user_id>', methods=['GET'])
+def get_user(user_id):
+    """API endpoint to get user information by ID."""
+    try:
+        session_id = request.headers.get('Session-ID')
+        
+        # Import the database service
+        from database.service import DatabaseService
+        
+        db_service = DatabaseService()
+        user = db_service.get_user_by_id(user_id)
+        
+        if user:
+            return jsonify({
+                'success': True,
+                'user': {
+                    'id': user['id'],
+                    'name': user['name'],
+                    'email': user['email']
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'User not found'
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }), 500
+
 @app.route('/api/chat-stream', methods=['POST'])
 @rate_limit_check
 def chat_stream():
