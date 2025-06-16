@@ -417,32 +417,65 @@ const handleStreamingResponse = async (response, messageId) => {
 
     try {
       // Collect all chunks
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      // Read first chunk
+      const first = await reader.read();
+      if (first.value) {
+        accumulatedText += decoder.decode(first.value, { stream: true });
+      }
 
-        
-        const chunk = decoder.decode(value, { stream: true });
-        accumulatedText += chunk;
-        
-        // Use a function to update with the latest accumulatedText
-        const currentText = accumulatedText; // Create a stable reference
+      const second = await reader.read();
+      let secondText = '';
+      if (second.value) {
+        secondText = decoder.decode(second.value, { stream: true });
+        accumulatedText += secondText;
+      }
+
+      const singleChunk = first.done || (second.done && !secondText);
+
+      if (singleChunk) {
+        if (accumulatedText.trim()) {
+          await simulateTyping(accumulatedText.trim(), messageId, 35);
+          return accumulatedText.trim();
+        }
+      } else {
+        // Begin streaming using the chunks we've already read
         setMessages(prev =>
           prev.map(msg =>
             msg.id === messageId
-              ? { ...msg, text: currentText, isStreaming: true }
+              ? { ...msg, text: accumulatedText, isStreaming: true }
               : msg
           )
         );
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          accumulatedText += chunk;
+
+          // Create a stable copy of the current accumulated text
+          const currentText = accumulatedText;
+          
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === messageId
+                ? { ...msg, text: currentText, isStreaming: true }
+                : msg
+            )
+          );
+        }
+
+        // Finished streaming
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, text: accumulatedText.trim(), isStreaming: false }
+              : msg
+          )
+        );
+        return accumulatedText.trim();
       }
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === messageId
-            ? { ...msg, text: accumulatedText.trim(), isStreaming: false }
-            : msg
-        )
-      );
-      return accumulatedText.trim();
     } catch (streamError) {
       console.log('❌ Streaming failed:', streamError);
     }
