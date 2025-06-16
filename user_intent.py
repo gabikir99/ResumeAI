@@ -130,7 +130,7 @@ INTENT_FUNCTIONS = [
             "properties": {
                 "info_type": {
                     "type": "string",
-                    "enum": ["name", "current_role", "experience", "skills", "education", "other", "career_interest"]
+                    "enum": ["name", "current_role", "experience", "skills", "education", "email", "phone", "other", "career_interest"]
                 },
                 "info_value": {"type": "string", "description": "The information value"}
             },
@@ -278,6 +278,9 @@ class IntentClassifier:
             (r'looking for (.+) (?:job|position|role)', 'career_interest'),
             (r'create (?:a )?resume for (.+)', 'career_interest'),
             (r'interested in (.+) (?:roles?|positions?|jobs?)', 'career_interest'),
+            (r'(?:my\s+)?email(?: address)?\s*(?:is|:)\s*([\w\.-]+@[\w\.-]+)', 'email'),
+            (r'(?:my\s+)?phone(?: number)?\s*(?:is|:)\s*([\d\-\+\s\(\)]+)', 'phone'),
+            (r'\b\d{3}[\-\s]?\d{3}[\-\s]?\d{4}\b', 'phone'),
         ]
         
         for pattern, info_type in personal_patterns:
@@ -334,7 +337,7 @@ class IntentClassifier:
             return {'intent': 'answer_career_question', 'args': {'question': user_input}}
         
         # PRIORITY 8: Check for specific resume section requests
-        resume_sections = ['summary', 'objective', 'experience', 'skills', 'education', 'projects']
+        resume_sections = ['summary', 'objective', 'experience', 'skills', 'education', 'projects', 'certifications', 'awards', 'volunteer']
         section_keywords = ['rewrite', 'redo', 'change', 'update', 'revise', 'remake']
         
         for section in resume_sections:
@@ -350,7 +353,8 @@ class IntentClassifier:
             'resume', 'cv', 'cover letter', 'job application', 'interview',
             'career advice', 'professional summary', 'work experience',
             'pages', 'sections', 'should i', 'better to', 'make me',
-            'help me', 'create', 'write', 'build'
+            'help me', 'create', 'write', 'build', 'certification', 'certifications',
+            'volunteer', 'award', 'linkedin', 'portfolio'
         ]
         
         if any(keyword in user_input_lower for keyword in specific_career_keywords):
