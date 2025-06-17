@@ -69,7 +69,7 @@ const Login = ({ onLoginSuccess, onSwitchToRegister, onClose }) => {
         
         // Create session after successful login
         try {
-          const sessionRes = await fetch('http://localhost:5000/api/session', {
+          const sessionRes = await fetch(`${API_BASE}/api/session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'new' })
