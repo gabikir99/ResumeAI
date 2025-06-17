@@ -279,21 +279,23 @@ def register_user():
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def login_user():
     """API endpoint for user login."""
+
+    # ✅ Handle preflight CORS request
+    if request.method == 'OPTIONS':
+        return jsonify({'ok': True}), 200
+
     try:
         data = request.json
-        
+
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-        
+
         email = data.get('email', '').strip()
         password = data.get('password', '')
-        
-   
+
         from database import login
-        
-        
         result = login(email, password)
-        
+
         if result['success']:
             return jsonify({
                 'success': True,
@@ -309,12 +311,14 @@ def login_user():
                 'success': False,
                 'message': result['message']
             }), 401
-            
+
     except Exception as e:
+        print("LOGIN ERROR:", e)
         return jsonify({
             'success': False,
             'message': f'Server error: {str(e)}'
         }), 500
+
     
 # Add this to your app.py file
 
