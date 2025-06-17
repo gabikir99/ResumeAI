@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import API_BASE from './api';
 
 const Login = ({ onLoginSuccess, onSwitchToRegister, onClose }) => {
   const [formData, setFormData] = useState({
@@ -49,7 +50,7 @@ const Login = ({ onLoginSuccess, onSwitchToRegister, onClose }) => {
     
     try {
       // Send login data to your Flask backend
-      const response = await fetch('http://localhost:5000/api/login', {
+      const response = await fetch(`${API_BASE}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

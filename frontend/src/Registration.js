@@ -1,4 +1,5 @@
 import React, {useState, useRef, useEffect} from 'react';
+import  API_BASE  from './api'
 
 const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
   const [formData, setFormData] = useState({
@@ -61,7 +62,7 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
     
     try {
       // Send registration data to your Flask backend
-      const response = await fetch('http://localhost:5000/api/register', {
+      const response = await fetch(`${API_BASE}/api/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -82,7 +83,7 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
         
         // Create session after successful registration
         try {
-          const sessionRes = await fetch('http://localhost:5000/api/session', {
+          const sessionRes = await fetch(`${API_BASE}/api/session`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'new' })

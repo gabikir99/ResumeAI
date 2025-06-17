@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import Registration from './Registration'; 
 import Login from './Login';
+import API_BASE from './api';
 import LandingPage from './LandingPage'; 
 
 // Main App Component
@@ -20,7 +21,7 @@ const App = () => {
         
         if (userId && sessionId) {
           // Verify the session is still valid with the backend
-          const response = await fetch(`http://localhost:5000/api/user/${userId}`, {
+          const response = await fetch(`${API_BASE}/api/user/${userId}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
