@@ -9,7 +9,7 @@ from contextlib import contextmanager
 load_dotenv()
 
 # Database configuration
-DATABASE_URL = os.getenv('EXTERNAL_DATABASE_URL')
+DATABASE_URL = os.getenv('DATABASE_URL')
 
 # Create engine
 engine = create_engine(
