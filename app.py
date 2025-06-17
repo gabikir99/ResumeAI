@@ -21,7 +21,7 @@ api_key = os.getenv("OPENAI_API_KEY")
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app, supports_credentials=True, origins=["https://resumeai-1-jlrd.onrender.com"])
 
 # Initialize in-memory rate limiter (50 messages per 3 hours)
 rate_limiter = InMemoryRateLimiter(
@@ -225,7 +225,7 @@ def handle_intent(intent_info, memory_manager, original_input):
 def home():
     return "Flask app is running"
 
-@app.route('/api/register', methods=['POST'])
+@app.route('/api/register', methods=['POST', 'OPTIONS'])
 def register_user():
     """API endpoint for user registration."""
     try:
@@ -272,7 +272,7 @@ def register_user():
             'message': f'Server error: {str(e)}'
         }), 500
 
-@app.route('/api/login', methods=['POST'])
+@app.route('/api/login', methods=['POST', 'OPTIONS'])
 def login_user():
     """API endpoint for user login."""
     try:
