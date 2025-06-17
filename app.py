@@ -228,23 +228,25 @@ def home():
 @app.route('/api/register', methods=['POST', 'OPTIONS'])
 def register_user():
     """API endpoint for user registration."""
+    
+    # ✅ Handle preflight CORS request first
+    if request.method == 'OPTIONS':
+        return jsonify({'ok': True}), 200
+
     try:
         data = request.json
-        
+
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-        
+
         name = data.get('name', '').strip()
         email = data.get('email', '').strip()
         password = data.get('password', '')
         confirm_password = data.get('confirmPassword', '')
-        
-        # Import the database functions
+
         from database import create_account
-        
-        # Use your existing database service to create the account
         result = create_account(name, email, password, confirm_password)
-        
+
         if result['success']:
             return jsonify({
                 'success': True,
@@ -260,17 +262,19 @@ def register_user():
                 'success': False,
                 'message': result.get('message', 'Registration failed')
             }), 400
-            
+
     except ValueError as e:
         return jsonify({
             'success': False,
             'message': str(e)
         }), 400
     except Exception as e:
+        print("Registration error:", e)
         return jsonify({
             'success': False,
             'message': f'Server error: {str(e)}'
         }), 500
+
 
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def login_user():
