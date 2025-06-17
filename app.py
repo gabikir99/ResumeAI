@@ -221,6 +221,9 @@ def handle_intent(intent_info, memory_manager, original_input):
             memory_manager.get_chat_history()
         )
 
+@app.route('/')
+def home():
+    return "Flask app is running"
 
 @app.route('/api/register', methods=['POST'])
 def register_user():
