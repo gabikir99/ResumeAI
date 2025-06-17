@@ -21,7 +21,9 @@ api_key = os.getenv("OPENAI_API_KEY")
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app, supports_credentials=True, origins=["https://resumeai-1-jlrd.onrender.com"])
+CORS(app, supports_credentials=True,
+     origins=["https://resumeai-1-jlrd.onrender.com", "http://localhost:3000"])
+
 
 # Initialize in-memory rate limiter (50 messages per 3 hours)
 rate_limiter = InMemoryRateLimiter(
