@@ -10,6 +10,7 @@ langchain-openai
 langchain-community
 pdfplumber
 gunicorn
+PyPDF2
 
 # Database dependencies
 sqlalchemy
