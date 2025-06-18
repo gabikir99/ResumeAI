@@ -60,6 +60,22 @@ class DatabaseService:
                 'message': 'Account created successfully',
                 'user': user.to_dict()
             }
+    def assign_session_to_user(self, user_id: int, session_id: str) -> bool:
+        """Assign session_id to user"""
+        with get_db_session() as session:
+            user = session.query(User).filter(User.id == user_id).first()
+        if user:
+            user.session_id = session_id
+            user.updated_at = datetime.utcnow()
+            session.commit()  
+            return True
+        return False
+
+    def get_user_by_session_id(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get user by session_id"""
+        with get_db_session() as session:
+            user = session.query(User).filter(User.session_id == session_id).first()
+        return user.to_dict() if user else None
     
     def login_user(self, email: str, password: str) -> Dict[str, Any]:
         """Authenticate user login - for future login functionality"""

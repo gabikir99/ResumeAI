@@ -80,7 +80,10 @@ const Registration = ({ onSignupSuccess, onSwitchToLogin, onClose }) => {
       if (data.success) {
         // Registration successful
         console.log('Registration successful:', data.user);
-        
+        if (data.session_id) {
+        localStorage.setItem('session_id', data.session_id);
+        localStorage.setItem('user_id', data.user.id.toString());
+      }
         // Create session after successful registration
         try {
           const sessionRes = await fetch(`${API_BASE}/api/session`, {

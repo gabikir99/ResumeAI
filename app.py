@@ -246,18 +246,25 @@ def register_user():
         password = data.get('password', '')
         confirm_password = data.get('confirmPassword', '')
 
-        from database import create_account
+        from database import create_account, db_service
+        import uuid
         result = create_account(name, email, password, confirm_password)
 
         if result['success']:
-            return jsonify({
+            permanent_session_id = str(uuid.uuid4())
+            user_id = result['user']['id']
+            session_assigned = db_service.assign_session_to_user(user_id, permanent_session_id)
+
+            if session_assigned:
+                return jsonify({
                 'success': True,
                 'message': result['message'],
                 'user': {
                     'id': result['user']['id'],
                     'name': result['user']['name'],
                     'email': result['user']['email']
-                }
+                }, 
+                'session_id': permanent_session_id
             }), 201
         else:
             return jsonify({
@@ -282,6 +289,8 @@ def register_user():
 def login_user():
     """API endpoint for user login."""
 
+    from database import db_service, login
+
     # ✅ Handle preflight CORS request
     if request.method == 'OPTIONS':
         return jsonify({'ok': True}), 200
@@ -297,6 +306,11 @@ def login_user():
 
         from database import login
         result = login(email, password)
+        if result['success']:
+            user_id = result['user']['id']
+            user_data = db_service.get_user_by_id(user_id)
+
+        session_id = user_data.get('session_id') if user_data else None
 
         if result['success']:
             return jsonify({
@@ -306,7 +320,8 @@ def login_user():
                     'id': result['user']['id'],
                     'name': result['user']['name'],
                     'email': result['user']['email']
-                }
+                }, 
+                'session_id': session_id  
             }), 200
         else:
             return jsonify({

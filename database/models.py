@@ -14,6 +14,7 @@ class User(Base):
     name = Column(String(255), nullable=False)  # Full Name from the UI
     email = Column(String(255), unique=True, nullable=False, index=True)  # Email Address from the UI
     password_hash = Column(String(255), nullable=False)  # Password (hashed)
+    session_id = Column(String(36), nullable=True, index=True, unique=True) # storing session id for rate limit check
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -38,6 +39,7 @@ class User(Base):
             'name': self.name,
             'email': self.email,
             'is_active': self.is_active,
+            'session_id': self.session_id,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

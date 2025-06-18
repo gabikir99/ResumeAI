@@ -66,7 +66,10 @@ const Login = ({ onLoginSuccess, onSwitchToRegister, onClose }) => {
       if (data.success) {
         // Login successful
         console.log('Login successful:', data.user);
-        
+        if (data.session_id) {
+        localStorage.setItem('session_id', data.session_id);
+        localStorage.setItem('user_id', data.user.id.toString());
+      }
         // Create session after successful login
         try {
           const sessionRes = await fetch(`${API_BASE}/api/session`, {
