@@ -64,9 +64,9 @@ class DatabaseService:
         """Assign session_id to user"""
         with get_db_session() as session:
             user = session.query(User).filter(User.id == user_id).first()
-        if user:
-            user.session_id = session_id
-            user.updated_at = datetime.utcnow()
+            if user:
+                user.session_id = session_id
+                user.updated_at = datetime.utcnow()
             session.commit()  
             return True
         return False
