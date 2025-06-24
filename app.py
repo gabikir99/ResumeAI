@@ -18,7 +18,6 @@ from user_intent import IntentClassifier
 from rate_limit import DatabaseRateLimiter
 from pdf_processor import PDFProcessor
 from flask_cors import CORS
-from rate_limit import InMemoryRateLimiter
 from functools import wraps
 from database import db_service
 from fingerprint import get_fingerprint
@@ -576,11 +575,11 @@ def rate_limit_status():
     session_id = request.args.get('session_id')
     
     if not session_id:
-        return jsonify({'error': 'No session_id provided'}), 400
+        session_id = get_fingerprint(request)
     
     stats = rate_limiter.get_session_stats(session_id)
     
-    return jsonify({
+    response = jsonify({
         'session_id': session_id,
         'messages_used': stats['current_count'],
         'messages_limit': stats['limit'],
@@ -588,6 +587,8 @@ def rate_limit_status():
         'reset_time': stats['reset_time'].isoformat() if stats['reset_time'] else None,
         'time_until_reset': stats['time_until_reset']
     })
+    response.headers['X-Session-ID'] = session_id
+    return response
 
 @app.route('/api/rate-limit/reset', methods=['POST'])
 def rate_limit_reset():

@@ -231,10 +231,17 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
- const fetchRateLimitInfo = async (sessionIdToUse = sessionId) => {
+const fetchRateLimitInfo = async (sessionIdToUse = sessionId) => {
   try {
-    const res = await fetch(`${API_BASE}/api/rate-limit/status?session_id=${sessionIdToUse}`);
+    const url = sessionIdToUse
+      ? `${API_BASE}/api/rate-limit/status?session_id=${sessionIdToUse}`
+      : `${API_BASE}/api/rate-limit/status`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch rate limit status');
+    const headerId = res.headers.get('X-Session-ID');
+    if (headerId && headerId !== sessionId) {
+      setSessionId(headerId);
+    }
     const data = await res.json();
     console.log("✅ Rate limit data:", data);
     setRateLimitInfo({ remaining: data.messages_remaining, total: data.messages_limit });
@@ -327,20 +334,14 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   // Fixed API base URL
   const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-  // Persist session ID so chats remain consistent across reloads
+  // Persist session ID so chats remain consistent across reloads and browser restarts
   const [sessionId, setSessionId] = useState(() => {
-    let storedSessionID = sessionStorage.getItem('session_id') || null
-     if (!storedSessionID) {
-    storedSessionID = 'session_'+ Date.now() + '_' + Math.random().toString(36).substr(2,9); 
-    sessionStorage.setItem('session_id', storedSessionID);
-  }
-  return storedSessionID; 
-});
+    return localStorage.getItem('session_id') || null;
+  });
  
-
   useEffect(() => {
     if (sessionId) {
-      sessionStorage.setItem('session_id', sessionId);
+      localStorage.setItem('session_id', sessionId);
       fetchRateLimitInfo(sessionId);
     }
   }, [sessionId]);
@@ -617,13 +618,18 @@ const handleSendMessage = async () => {
       const response = await fetch(`${API_BASE}/api/chat-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: originalMessage, 
-          session_id: currentSessionId 
+        body: JSON.stringify({
+          message: originalMessage,
+          session_id: currentSessionId
         })
       });
 
       if (response.ok) {
+        const headerId = response.headers.get('X-Session-ID');
+        if (headerId && headerId !== sessionId) {
+          setSessionId(headerId);
+          currentSessionId = headerId;
+        }
         await handleStreamingResponse(response, textResponseId);
       } else {
         throw new Error(`API request failed with status: ${response.status}`);
@@ -638,13 +644,18 @@ const handleSendMessage = async () => {
       const response = await fetch(`${API_BASE}/api/chat-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: originalMessage, 
-          session_id: currentSessionId 
+        body: JSON.stringify({
+          message: originalMessage,
+          session_id: currentSessionId
         })
       });
 
       if (response.ok) {
+        const headerId = response.headers.get('X-Session-ID');
+        if (headerId && headerId !== sessionId) {
+          setSessionId(headerId);
+          currentSessionId = headerId;
+        }
         const responseText = await handleStreamingResponse(response, aiResponseId);
         await fetchRateLimitInfo();
       } else {
