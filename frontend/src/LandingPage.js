@@ -341,6 +341,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   useEffect(() => {
     if (sessionId) {
       sessionStorage.setItem('session_id', sessionId);
+      fetchRateLimitInfo(sessionId);
     }
   }, [sessionId]);
 
@@ -348,6 +349,7 @@ const LandingPage = ({ user, onSendMessage, onFileUpload, onClickLogin, onClickS
   useEffect(() => {
     if (showChat) {
       testServerConnection();
+      fetchRateLimitInfo();
     }
   }, [showChat]);
 

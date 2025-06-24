@@ -32,3 +32,4 @@ ENV/
 ehthumbs.db
 Thumbs.db
 .aider*
+local.db

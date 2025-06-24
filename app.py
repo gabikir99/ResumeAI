@@ -15,11 +15,14 @@ from datetime import datetime
 from gpt_service import GPTService
 from response_handlers import ResponseHandlers
 from user_intent import IntentClassifier
-from memory_manager import MemoryManager
+from rate_limit import DatabaseRateLimiter
 from pdf_processor import PDFProcessor
 from flask_cors import CORS
 from rate_limit import InMemoryRateLimiter
 from functools import wraps
+from database import db_service
+from fingerprint import get_fingerprint
+from flask import g
 
 # Load environment variables
 load_dotenv()
@@ -31,8 +34,8 @@ CORS(app, supports_credentials=True,
      origins=["https://resumeai-1-jlrd.onrender.com", "http://localhost:3000"])
 
 
-# Initialize in-memory rate limiter (50 messages per 3 hours)
-rate_limiter = InMemoryRateLimiter(
+# Initialize database-backed rate limiter (50 messages per 3 hours)
+rate_limiter = DatabaseRateLimiter(
     message_limit=50,
     reset_period_hours=3
 )
@@ -72,8 +75,9 @@ def rate_limit_check(f):
             session_id = request.args.get('session_id')
         
         if not session_id:
-            # If no session_id, proceed without rate limiting
-            return f(*args, **kwargs)
+            # Generate fingerprint-based ID for anonymous users
+            session_id = get_fingerprint(request)
+        g.session_id = session_id
         
         # Check rate limit
         limit_status = rate_limiter.check_limit(session_id)
@@ -102,6 +106,7 @@ def rate_limit_check(f):
             result.headers['X-RateLimit-Used'] = str(limit_status['current_count'] + 1)
             if limit_status['reset_time']:
                 result.headers['X-RateLimit-Reset'] = str(int(limit_status['reset_time'].timestamp()))
+            result.headers['X-Session-ID'] = session_id
         
         return result
     
@@ -125,19 +130,15 @@ def stream_response_with_delay(text, chunk_size=5):
 def get_memory_manager(session_id=None):
     """Get or create a memory manager for the given session ID."""
     if not session_id:
-        # Create a new session if none provided
-        memory_manager = MemoryManager()
-        session_id = memory_manager.session_id
-        session_memories[session_id] = memory_manager
-        return memory_manager, session_id
+        session_id = getattr(g, 'session_id', None) or get_fingerprint(request)
     
     # Return existing memory manager or create new one
     if session_id in session_memories:
         return session_memories[session_id], session_id
-    else:
-        memory_manager = MemoryManager(session_id=session_id)
-        session_memories[session_id] = memory_manager
-        return memory_manager, session_id
+    
+    memory_manager = MemoryManager(session_id=session_id, db_service=db_service)
+    session_memories[session_id] = memory_manager
+    return memory_manager, session_id
 
 def handle_intent(intent_info, memory_manager, original_input):
     """Handle the classified intent and return appropriate response."""
@@ -621,7 +622,7 @@ def manage_session():
     
     if action == 'new':
         # Create a new session
-        memory_manager = MemoryManager()
+        memory_manager = MemoryManager(db_service=db_service)
         session_id = memory_manager.session_id
         session_memories[session_id] = memory_manager
         

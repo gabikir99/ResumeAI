@@ -3,13 +3,16 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    # dotenv is optional in testing environments
+    load_dotenv = None
 from contextlib import contextmanager
 
-load_dotenv()
-
-# Database configuration
-DATABASE_URL = os.getenv('DATABASE_URL')
+# Database configuration with fallback for tests
+DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///local.db')
 
 # Create engine
 engine = create_engine(

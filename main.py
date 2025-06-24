@@ -5,8 +5,9 @@ from gpt_service import GPTService
 from response_handlers import ResponseHandlers
 from user_intent import IntentClassifier
 from memory_manager import MemoryManager
+from database import db_service
 from utils import print_streaming
-from rate_limit import InMemoryRateLimiter
+from rate_limit import DatabaseRateLimiter
 
 def main():
     """Main function to run the resume chatbot with in-memory rate limiting."""
@@ -18,8 +19,8 @@ def main():
         print("Error: OPENAI_API_KEY not found in environment variables.")
         return
     
-    # Initialize in-memory rate limiter (50 messages per 24 hours)
-    rate_limiter = InMemoryRateLimiter(message_limit=50, reset_period_hours=24)
+    # Initialize database-backed rate limiter (50 messages per 24 hours)
+    rate_limiter = DatabaseRateLimiter(message_limit=50, reset_period_hours=24)
     
     # Initialize services
     client = OpenAI(api_key=api_key)
@@ -108,7 +109,7 @@ def main():
                 print(f"📋 Current Memory State:")
                 print(f"   Session: {memory_manager.session_id[:8]}...")
                 print(f"   User Info: {user_info if user_info else 'None stored'}")
-                print(f"   Chat History: {len(chat_history.split()) if chat_history else 0} words")
+                print(f"   Chat History: {len(' '.join(str(m) for m in chat_history).split()) if chat_history else 0} words")
                 if chat_history:
                     print(f"   Last Exchange: ...{chat_history[-100:]}" if len(chat_history) > 100 else f"   History: {chat_history}")
                 continue

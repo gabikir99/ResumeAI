@@ -143,10 +143,10 @@ class DatabaseService:
             return profile.to_dict()
     
     # Session Management - Keep for chat functionality
-    def create_chat_session(self, user_id: Optional[int] = None) -> str:
+    def create_chat_session(self, user_id: Optional[int] = None, session_id: Optional[str] = None) -> str:
         """Create a new chat session and return session_id"""
         with get_db_session() as session:
-            chat_session = ChatSession.create_session(user_id=user_id)
+            chat_session = ChatSession.create_session(user_id=user_id, session_id=session_id)
             session.add(chat_session)
             session.flush()  # Ensure we get the session_id
             return chat_session.session_id
@@ -168,22 +168,26 @@ class DatabaseService:
             
             return [s.to_dict() for s in sessions]
     
-    def update_session_activity(self, session_id: str):
-        """Update last activity timestamp for session"""
-        with get_db_session() as session:
-            chat_session = session.query(ChatSession).filter(
-                ChatSession.session_id == session_id
-            ).first()
-            if chat_session:
-                chat_session.last_activity = datetime.utcnow()
+    def update_session_activity(self, session_id: str, session: Optional[Session] = None):
+        """Update last activity timestamp for a session."""
+        if session is None:
+            with get_db_session() as new_session:
+                self.update_session_activity(session_id, session=new_session)
+                return
+
+        chat_session = session.query(ChatSession).filter(
+            ChatSession.session_id == session_id
+        ).first()
+        if chat_session:
+            chat_session.last_activity = datetime.utcnow()
     
     # Message Management - Keep for chat functionality
     def save_message(self, session_id: str, message_type: str, content: str, 
                     intent: Optional[str] = None, extra_data: Optional[Dict] = None) -> Dict[str, Any]:
         """Save a chat message"""
         with get_db_session() as session:
-            # Update session activity
-            self.update_session_activity(session_id)
+            # Update session activity using the same DB session
+            self.update_session_activity(session_id, session=session)
             
             message = ChatMessage(
                 session_id=session_id,

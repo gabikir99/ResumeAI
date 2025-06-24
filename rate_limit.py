@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
-from collections import defaultdict
 import json
 import threading
+from database.connection import get_db_session
+from database.models import ChatSession
 
 class InMemoryRateLimiter:
     """Simple in-memory rate limiter - no database required!"""
@@ -133,3 +134,105 @@ class InMemoryRateLimiter:
             
             for session_id in expired:
                 del self.sessions[session_id]
+
+
+class DatabaseRateLimiter:
+    """Rate limiter that stores counts in the database."""
+
+    def __init__(self, message_limit=50, reset_period_hours=24):
+        self.message_limit = message_limit
+        self.reset_period = timedelta(hours=reset_period_hours)
+
+    def _get_session(self, session, session_id):
+        return session.query(ChatSession).filter(ChatSession.session_id == session_id).first()
+
+    def check_limit(self, session_id):
+        with get_db_session() as session:
+            chat_session = self._get_session(session, session_id)
+            if not chat_session:
+                return {
+                    'allowed': True,
+                    'current_count': 0,
+                    'limit': self.message_limit,
+                    'reset_time': None,
+                    'remaining': self.message_limit
+                }
+
+            first_time = chat_session.first_message_time
+            count = chat_session.message_count or 0
+            if first_time:
+                reset_time = first_time + self.reset_period
+                if datetime.utcnow() >= reset_time:
+                    chat_session.message_count = 0
+                    chat_session.first_message_time = None
+                    session.flush()
+                    return {
+                        'allowed': True,
+                        'current_count': 0,
+                        'limit': self.message_limit,
+                        'reset_time': None,
+                        'remaining': self.message_limit
+                    }
+            else:
+                reset_time = None
+
+            allowed = count < self.message_limit
+            remaining = max(0, self.message_limit - count)
+            time_until_reset = None
+            if reset_time:
+                time_until_reset = str(reset_time - datetime.utcnow()).split('.')[0]
+
+            return {
+                'allowed': allowed,
+                'current_count': count,
+                'limit': self.message_limit,
+                'reset_time': reset_time,
+                'remaining': remaining,
+                'time_until_reset': time_until_reset
+            }
+
+    def increment_count(self, session_id):
+        with get_db_session() as session:
+            chat_session = self._get_session(session, session_id)
+            if not chat_session:
+                chat_session = ChatSession.create_session()
+                chat_session.session_id = session_id
+                session.add(chat_session)
+            if chat_session.first_message_time is None:
+                chat_session.first_message_time = datetime.utcnow()
+            chat_session.message_count = (chat_session.message_count or 0) + 1
+            session.flush()
+            return chat_session.message_count
+
+    def reset_session(self, session_id):
+        with get_db_session() as session:
+            chat_session = self._get_session(session, session_id)
+            if chat_session:
+                chat_session.message_count = 0
+                chat_session.first_message_time = None
+                session.flush()
+
+    def get_session_stats(self, session_id):
+        return self.check_limit(session_id)
+
+    def get_all_active_sessions(self):
+        with get_db_session() as session:
+            sessions = session.query(ChatSession).filter(ChatSession.message_count > 0).all()
+            return [
+                {
+                    'session_id': s.session_id,
+                    'message_count': s.message_count,
+                    'first_message_time': s.first_message_time.isoformat() if s.first_message_time else None
+                }
+                for s in sessions
+            ]
+
+    def cleanup_expired_sessions(self):
+        with get_db_session() as session:
+            now = datetime.utcnow()
+            for s in session.query(ChatSession).filter(ChatSession.first_message_time != None).all():
+                reset_time = s.first_message_time + self.reset_period
+                if now >= reset_time:
+                    s.message_count = 0
+                    s.first_message_time = None
+            session.flush()

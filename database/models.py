@@ -117,19 +117,23 @@ class ChatSession(Base):
     title = Column(String(255))  # Optional session title
     last_activity = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    message_count = Column(Integer, default=0)
+    first_message_time = Column(DateTime(timezone=True))
     
     # Relationships
     user = relationship("User", back_populates="chat_sessions")
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
     
     @classmethod
-    def create_session(cls, user_id=None, title=None):
+    def create_session(cls, user_id=None, title=None, session_id=None):
         """Create a new chat session"""
         return cls(
-            session_id=str(uuid.uuid4()),
+            session_id=session_id or str(uuid.uuid4()),
             user_id=user_id,
             title=title,
-            last_activity=datetime.utcnow()
+            last_activity=datetime.utcnow(),
+            message_count=0,
+            first_message_time=None
         )
     
     def to_dict(self):
@@ -141,7 +145,8 @@ class ChatSession(Base):
             'title': self.title,
             'last_activity': self.last_activity.isoformat() if self.last_activity else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'message_count': len(self.messages) if self.messages else 0
+            'message_count': self.message_count,
+            'first_message_time': self.first_message_time.isoformat() if self.first_message_time else None
         }
 
 class ChatMessage(Base):

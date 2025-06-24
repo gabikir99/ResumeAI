@@ -101,10 +101,10 @@ def test_database_connection():
         with get_db_session() as session:
             user_count = session.query(User).count()
             print(f"✅ Database connected - {user_count} users found")
-            return True
+            assert user_count >= 0
     except Exception as e:
         print(f"❌ Database connection failed: {str(e)}")
-        return False
+        assert False
 
 def main():
     print("🚀 Starting Resume Assistant Authentication Test")
