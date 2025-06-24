@@ -1,7 +1,13 @@
 from flask import Flask, request, Response, stream_with_context, jsonify
 from dotenv import load_dotenv
 from openai import OpenAI
+from database.connection import get_db_session
+from database.models import User
+from sqlalchemy import text
+import uuid
 import os
+from google.oauth2 import id_token
+from google.auth.transport import requests
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -222,6 +228,40 @@ def handle_intent(intent_info, memory_manager, original_input):
             memory_manager.get_user_info(), 
             memory_manager.get_chat_history()
         )
+    
+def init_database_for_google_auth():
+    """Initialize database with Google auth fields at startup."""
+    try:
+        with get_db_session() as session:
+            # Check if google_id column exists
+            result = session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='users' AND column_name='google_id'
+            """))
+            
+            if not result.fetchone():
+                # Add google_id column
+                session.execute(text("ALTER TABLE users ADD COLUMN google_id VARCHAR(255)"))
+                print("✓ Added google_id column to users table")
+            
+            # Check if profile_picture column exists
+            result = session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='users' AND column_name='profile_picture'
+            """))
+            
+            if not result.fetchone():
+                # Add profile_picture column
+                session.execute(text("ALTER TABLE users ADD COLUMN profile_picture TEXT"))
+                print("✓ Added profile_picture column to users table")
+            
+            session.commit()
+            print("✓ Database initialized for Google OAuth")
+        
+    except Exception as e:
+        print(f"Database initialization info: {e}")
 
 @app.route('/')
 def home():
@@ -337,7 +377,105 @@ def login_user():
         }), 500
 
     
-# Add this to your app.py file
+@app.route('/api/auth/google', methods=['POST'])
+def google_auth():
+    """Handle Google OAuth authentication."""
+    try:
+        data = request.json
+        credential = data.get('credential')
+        
+        if not credential:
+            return jsonify({'success': False, 'message': 'No credential provided'}), 400
+        
+        # Verify the Google token
+        try:
+            idinfo = id_token.verify_oauth2_token(
+                credential, 
+                requests.Request(), 
+                os.getenv('GOOGLE_CLIENT_ID')
+            )
+            
+            google_user_id = idinfo['sub']
+            email = idinfo['email']
+            name = idinfo['name']
+            picture = idinfo.get('picture', '')
+            
+        except ValueError as e:
+            return jsonify({'success': False, 'message': 'Invalid Google token'}), 401
+        
+        # Use SQLAlchemy session instead of cursor
+        with get_db_session() as session:
+            # Check if user exists
+            existing_user = session.query(User).filter(User.email == email.lower().strip()).first()
+            
+            if existing_user:
+                # Update existing user with Google info
+                existing_user.google_id = google_user_id
+                existing_user.profile_picture = picture
+                existing_user.updated_at = datetime.utcnow()
+                
+                user_data = {
+                    'id': existing_user.id,
+                    'name': existing_user.name,
+                    'email': existing_user.email
+                }
+                session_id = existing_user.session_id or str(uuid.uuid4())
+                existing_user.session_id = session_id
+                
+            else:
+                # Create new user with Google data
+                new_user = User(
+                    name=name,
+                    email=email.lower().strip(),
+                    google_id=google_user_id,
+                    profile_picture=picture,
+                    session_id=str(uuid.uuid4())
+                )
+                # Set empty password for Google users
+                new_user.set_password('')
+                session.add(new_user)
+                session.flush()  # Get the user ID
+                
+                user_data = {
+                    'id': new_user.id,
+                    'name': new_user.name,
+                    'email': new_user.email
+                }
+                session_id = new_user.session_id
+            
+            session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Google authentication successful',
+            'user': user_data,
+            'session_id': session_id
+        })
+        
+    except Exception as e:
+        print(f"Google auth error: {e}")
+        return jsonify({'success': False, 'message': 'Authentication failed'}), 500
+
+
+def generate_session_id():
+    """Generate a unique session ID."""
+    import uuid
+    return str(uuid.uuid4())
+
+
+# You'll also need to update your database schema to include Google auth fields
+def update_user_table_for_google_auth():
+    """Add Google OAuth fields to users table."""
+    cursor = get_db_cursor()
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN google_id TEXT")
+        cursor.execute("ALTER TABLE users ADD COLUMN profile_picture TEXT")
+        cursor.connection.commit()
+    except Exception as e:
+        # Columns might already exist
+        print(f"Error updating table: {e}")
+    finally:
+        cursor.close()
 
 @app.route('/api/user/<int:user_id>', methods=['GET'])
 def get_user(user_id):
@@ -708,6 +846,8 @@ def submit_feedback():
         
     except Exception as e:
         return jsonify({'error': f'Failed to send feedback: {str(e)}'}), 500
+
+init_database_for_google_auth()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
