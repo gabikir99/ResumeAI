@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .connection import Base
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 
 class User(Base):
@@ -91,7 +91,7 @@ class UserProfile(Base):
                 self.other_info = {}
             self.other_info[info_type] = info_value
         
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def to_dict(self):
         """Convert profile to dictionary"""
@@ -131,7 +131,7 @@ class ChatSession(Base):
             session_id=session_id or str(uuid.uuid4()),
             user_id=user_id,
             title=title,
-            last_activity=datetime.utcnow(),
+            last_activity=datetime.now(timezone.utc),
             message_count=0,
             first_message_time=None
         )

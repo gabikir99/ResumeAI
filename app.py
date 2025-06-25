@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from database.connection import get_db_session
 from database.models import User
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 import uuid
 import os
 from google.oauth2 import id_token
@@ -11,11 +11,12 @@ from google.auth.transport import requests
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, timezone
 from gpt_service import GPTService
 from response_handlers import ResponseHandlers
 from user_intent import IntentClassifier
 from rate_limit import DatabaseRateLimiter
+from memory_manager import MemoryManager
 from pdf_processor import PDFProcessor
 from flask_cors import CORS
 from functools import wraps
@@ -233,27 +234,14 @@ def init_database_for_google_auth():
     """Initialize database with Google auth fields at startup."""
     try:
         with get_db_session() as session:
-            # Check if google_id column exists
-            result = session.execute(text("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name='users' AND column_name='google_id'
-            """))
-            
-            if not result.fetchone():
-                # Add google_id column
+            inspector = inspect(session.bind)
+            columns = [c['name'] for c in inspector.get_columns('users')]
+
+            if 'google_id' not in columns:
                 session.execute(text("ALTER TABLE users ADD COLUMN google_id VARCHAR(255)"))
                 print("✓ Added google_id column to users table")
             
-            # Check if profile_picture column exists
-            result = session.execute(text("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name='users' AND column_name='profile_picture'
-            """))
-            
-            if not result.fetchone():
-                # Add profile_picture column
+            if 'profile_picture' not in columns:
                 session.execute(text("ALTER TABLE users ADD COLUMN profile_picture TEXT"))
                 print("✓ Added profile_picture column to users table")
             
@@ -412,7 +400,7 @@ def google_auth():
                 # Update existing user with Google info
                 existing_user.google_id = google_user_id
                 existing_user.profile_picture = picture
-                existing_user.updated_at = datetime.utcnow()
+                existing_user.updated_at = datetime.now(timezone.utc)
                 
                 user_data = {
                     'id': existing_user.id,
@@ -510,6 +498,49 @@ def get_user(user_id):
             'message': f'Server error: {str(e)}'
         }), 500
 
+@app.route('/api/chat', methods=['POST', 'OPTIONS'])
+@rate_limit_check
+def chat():
+    """API endpoint for non-streaming chat."""
+    
+    # Handle preflight CORS request
+    if request.method == 'OPTIONS':
+        return jsonify({'ok': True}), 200
+    
+    try:
+        data = request.json
+        user_input = data.get('message', '')
+        session_id = data.get('session_id', None)
+        
+        if not user_input:
+            return jsonify({'error': 'No message provided'}), 400
+        
+        # Get or create memory manager for this session
+        memory_manager, session_id = get_memory_manager(session_id)
+        
+        # Process the message
+        intent_info = intent_classifier.classify_intent(user_input, memory_manager.get_user_info())
+        response = handle_intent(intent_info, memory_manager, user_input)
+        
+        # Add to memory
+        memory_manager.add_message(user_input, response)
+        
+        # Get rate limit status
+        limit_status = rate_limiter.get_session_stats(session_id) if hasattr(rate_limiter, 'get_session_stats') else rate_limiter.check_limit(session_id)
+        
+        return jsonify({
+            'response': response,
+            'session_id': session_id,
+            'rate_limit': {
+                'messages_remaining': limit_status.get('remaining', 50),
+                'messages_limit': limit_status.get('limit', 50)
+            }
+        }), 200, {'X-Session-ID': session_id}
+        
+    except Exception as e:
+        print(f"Chat error: {e}")
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
 @app.route('/api/chat-stream', methods=['POST'])
 @rate_limit_check
 def chat_stream():
@@ -566,7 +597,8 @@ def chat_stream():
                     headers={
                         'Cache-Control': 'no-cache',
                         'X-Accel-Buffering': 'no',
-                        'Transfer-Encoding': 'chunked'
+                        'Transfer-Encoding': 'chunked',
+                        'X-Session-ID': session_id  # Add this line
                     })
 
 @app.route('/api/rate-limit/status', methods=['GET'])

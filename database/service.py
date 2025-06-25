@@ -5,7 +5,7 @@ from sqlalchemy import desc, and_
 from .connection import get_db_session, init_database
 from .models import User, UserProfile, ChatSession, ChatMessage, JobApplication
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 class DatabaseService:
     """Service layer for database operations"""
@@ -66,7 +66,7 @@ class DatabaseService:
             user = session.query(User).filter(User.id == user_id).first()
             if user:
                 user.session_id = session_id
-                user.updated_at = datetime.utcnow()
+                user.updated_at = datetime.now(timezone.utc)
             session.commit()  
             return True
         return False
@@ -179,7 +179,7 @@ class DatabaseService:
             ChatSession.session_id == session_id
         ).first()
         if chat_session:
-            chat_session.last_activity = datetime.utcnow()
+            chat_session.last_activity = datetime.now(timezone.utc)
     
     # Message Management - Keep for chat functionality
     def save_message(self, session_id: str, message_type: str, content: str, 
@@ -260,13 +260,13 @@ class DatabaseService:
                 if hasattr(job_app, key):
                     setattr(job_app, key, value)
             
-            job_app.updated_at = datetime.utcnow()
+            job_app.updated_at = datetime.now(timezone.utc)
             return job_app.to_dict()
     
     # Utility Methods
     def cleanup_old_sessions(self, days_old: int = 7):
         """Clean up old inactive sessions"""
-        cutoff_date = datetime.utcnow() - timedelta(days=days_old)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_old)
         
         with get_db_session() as session:
             old_sessions = session.query(ChatSession).filter(

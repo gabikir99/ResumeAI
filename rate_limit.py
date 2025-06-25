@@ -1,8 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import threading
-from database.connection import get_db_session
+from database.connection import get_db_session, init_database
 from database.models import ChatSession
+
+# Ensure the required tables exist when this module is imported
+init_database()
 
 class InMemoryRateLimiter:
     """Simple in-memory rate limiter - no database required!"""
@@ -140,6 +143,8 @@ class DatabaseRateLimiter:
     """Rate limiter that stores counts in the database."""
 
     def __init__(self, message_limit=50, reset_period_hours=24):
+        # Ensure database tables are created
+        init_database()
         self.message_limit = message_limit
         self.reset_period = timedelta(hours=reset_period_hours)
 
@@ -159,10 +164,11 @@ class DatabaseRateLimiter:
                 }
 
             first_time = chat_session.first_message_time
-            count = chat_session.message_count or 0
+            if first_time and first_time.tzinfo is None:
+                first_time = first_time.replace(tzinfo=timezone.utc)
             if first_time:
                 reset_time = first_time + self.reset_period
-                if datetime.utcnow() >= reset_time:
+                if datetime.now(timezone.utc) >= reset_time:
                     chat_session.message_count = 0
                     chat_session.first_message_time = None
                     session.flush()
@@ -180,7 +186,7 @@ class DatabaseRateLimiter:
             remaining = max(0, self.message_limit - count)
             time_until_reset = None
             if reset_time:
-                time_until_reset = str(reset_time - datetime.utcnow()).split('.')[0]
+                time_until_reset = str(reset_time - datetime.now(timezone.utc)).split('.')[0]
 
             return {
                 'allowed': allowed,
@@ -199,7 +205,7 @@ class DatabaseRateLimiter:
                 chat_session.session_id = session_id
                 session.add(chat_session)
             if chat_session.first_message_time is None:
-                chat_session.first_message_time = datetime.utcnow()
+                chat_session.first_message_time = datetime.now(timezone.utc)
             chat_session.message_count = (chat_session.message_count or 0) + 1
             session.flush()
             return chat_session.message_count
@@ -229,9 +235,12 @@ class DatabaseRateLimiter:
 
     def cleanup_expired_sessions(self):
         with get_db_session() as session:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             for s in session.query(ChatSession).filter(ChatSession.first_message_time != None).all():
-                reset_time = s.first_message_time + self.reset_period
+                first_time = s.first_message_time
+                if first_time and first_time.tzinfo is None:
+                    first_time = first_time.replace(tzinfo=timezone.utc)
+                reset_time = first_time + self.reset_period
                 if now >= reset_time:
                     s.message_count = 0
                     s.first_message_time = None
