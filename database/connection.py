@@ -12,7 +12,9 @@ except Exception:
 from contextlib import contextmanager
 
 # Database configuration with fallback for tests
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///local.db')
+# Hardcoded local database (temporary fix)
+DATABASE_URL = 'postgresql://postgres:Gabicp24%28%29%3B@localhost:5432/resume_assistant'
+print(f"Using database: {DATABASE_URL}")  # Debug line
 
 # Create engine
 engine = create_engine(

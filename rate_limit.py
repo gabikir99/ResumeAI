@@ -182,6 +182,8 @@ class DatabaseRateLimiter:
             else:
                 reset_time = None
 
+
+            count = chat_session.message_count or 0
             allowed = count < self.message_limit
             remaining = max(0, self.message_limit - count)
             time_until_reset = None
