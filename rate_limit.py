@@ -47,7 +47,8 @@ class InMemoryRateLimiter:
                     'current_count': 0,
                     'limit': self.message_limit,
                     'reset_time': None,
-                    'remaining': self.message_limit
+                    'remaining': self.message_limit,
+                    'time_until_reset': None
                 }
             
             session = self.sessions[session_id]
@@ -61,7 +62,8 @@ class InMemoryRateLimiter:
                     'current_count': 0,
                     'limit': self.message_limit,
                     'reset_time': None,
-                    'remaining': self.message_limit
+                    'remaining': self.message_limit,
+                    'time_until_reset': None
                 }
             
             current_count = session['count']
@@ -160,7 +162,8 @@ class DatabaseRateLimiter:
                     'current_count': 0,
                     'limit': self.message_limit,
                     'reset_time': None,
-                    'remaining': self.message_limit
+                    'remaining': self.message_limit,
+                    'time_until_reset': None
                 }
 
             first_time = chat_session.first_message_time
