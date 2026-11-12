@@ -27,11 +27,41 @@ An interactive CLI tool that helps with resume creation, job application optimiz
    pip install -r requirements.txt
    ```
 
-3. Set up your OpenAI API key:
+3. Set environment variables. The app reads secrets from the environment and will not start the database layer without `DATABASE_URL`.
 
-   - Create a `.env` file in the project root
-   - Add your OpenAI API key: `OPENAI_API_KEY=your-api-key-here`
-   - Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+   ```bash
+   cp .env.example .env
+   cp frontend/.env.example frontend/.env
+   ```
+
+   Fill in `.env` (project root, loaded by Python) and `frontend/.env` (loaded by Create React App). Placeholder names are listed in those example files. Do not commit either `.env` file.
+
+   **Local Python (root `.env`)**
+
+   | Variable | When it is needed |
+   | --- | --- |
+   | `DATABASE_URL` | Always. PostgreSQL URL, for example `postgresql://USER:PASSWORD@localhost:5432/resume_assistant`. Startup fails with a clear error if this is missing. |
+   | `OPENAI_API_KEY` | Chat and CLI. Create a key at [OpenAI Platform](https://platform.openai.com/api-keys). |
+   | `GOOGLE_CLIENT_ID` | Google sign-in. OAuth **client ID** only (the API uses it to verify tokens). |
+   | `ADMIN_KEY` | Admin routes `/api/rate-limit/reset` and `/api/admin/sessions`. Those routes return an error if this is unset. |
+   | `SMTP_SERVER`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `ADMIN_EMAIL` | `POST /api/feedback` only. `SMTP_PORT` defaults to `587`. |
+   | `SQL_ECHO` | Optional. Set to `true` to log SQL. |
+
+   **Local React (`frontend/.env`)**
+
+   | Variable | When it is needed |
+   | --- | --- |
+   | `REACT_APP_API_URL` | Optional. Flask base URL. Defaults to `http://localhost:5000`. |
+   | `REACT_APP_GOOGLE_CLIENT_ID` | Google sign-in button. Same client ID as `GOOGLE_CLIENT_ID`. |
+
+   Restart `python app.py` / `npm start` after changing these files. Create React App only exposes variables that start with `REACT_APP_`, and it reads them at dev-server or build time.
+
+### Render
+
+Set the same variables in the Render dashboard. Do not put real values in the repo.
+
+- **Flask web service:** open the service, then **Environment**, and add `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`, `ADMIN_KEY`, and the SMTP variables if you use feedback email. For Postgres, create a Render PostgreSQL database and attach it to this service so Render injects `DATABASE_URL` (use that internal URL). If you set `DATABASE_URL` yourself, paste it only in the dashboard. The process exits on boot if `DATABASE_URL` is missing.
+- **React static site or web service:** set `REACT_APP_API_URL` to the public Flask URL and `REACT_APP_GOOGLE_CLIENT_ID` to the same Google client ID. Create React App bakes `REACT_APP_*` values in at **build** time, so change them and trigger a new deploy when they change. `GOOGLE_CLIENT_ID` on the API must match `REACT_APP_GOOGLE_CLIENT_ID`.
 
 ## Usage
 
@@ -88,4 +118,4 @@ The React app will send requests to `/api/*` endpoints served by Flask.
 
 ## Security Note
 
-Never commit your `.env` file to version control. It contains sensitive API keys.
+Never commit `.env` or `frontend/.env`. They hold the database URL, API keys, and other secrets. `.env.example` and `frontend/.env.example` are safe to commit because they contain placeholders only. If a real credential was ever committed, rotate it in the provider (Postgres, OpenAI, Google, SMTP, admin key). Deleting it from the latest files does not remove it from older git commits.

@@ -11,10 +11,14 @@ except Exception:
     load_dotenv = None
 from contextlib import contextmanager
 
-# Database configuration with fallback for tests
-# Hardcoded local database (temporary fix)
-DATABASE_URL = 'postgresql://postgres:Gabicp24%28%29%3B@localhost:5432/resume_assistant'
-print(f"Using database: {DATABASE_URL}")  # Debug line
+# Credentials stay in the environment. There is no in-repo fallback.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not set. Add it to the environment or to a .env file "
+        "in the project root before starting the app. See .env.example for the "
+        "expected format."
+    )
 
 # Create engine
 engine = create_engine(

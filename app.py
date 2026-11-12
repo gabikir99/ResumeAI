@@ -622,6 +622,17 @@ def rate_limit_status():
     response.headers['X-Session-ID'] = session_id
     return response
 
+def reject_if_admin_key_invalid(provided_key):
+    """Return an error response when ADMIN_KEY is missing or does not match."""
+    expected_key = os.getenv('ADMIN_KEY')
+    if not expected_key:
+        return jsonify({
+            'error': 'ADMIN_KEY is not set. Add it to the environment before using admin endpoints.'
+        }), 500
+    if provided_key != expected_key:
+        return jsonify({'error': 'Unauthorized'}), 401
+    return None
+
 @app.route('/api/rate-limit/reset', methods=['POST'])
 def rate_limit_reset():
     """Reset rate limit for a session (admin endpoint)."""
@@ -629,10 +640,10 @@ def rate_limit_reset():
     data = request.json
     session_id = data.get('session_id')
     admin_key = data.get('admin_key')
-    
-    # Simple admin key check (use proper authentication in production)
-    if admin_key != os.getenv('ADMIN_KEY', 'your-secret-admin-key'):
-        return jsonify({'error': 'Unauthorized'}), 401
+
+    auth_error = reject_if_admin_key_invalid(admin_key)
+    if auth_error is not None:
+        return auth_error
     
     if not session_id:
         return jsonify({'error': 'No session_id provided'}), 400
@@ -811,9 +822,10 @@ def admin_get_sessions():
     """Get all active sessions (admin endpoint)."""
     # Add authentication here in production
     admin_key = request.headers.get('X-Admin-Key')
-    
-    if admin_key != os.getenv('ADMIN_KEY', 'your-secret-admin-key'):
-        return jsonify({'error': 'Unauthorized'}), 401
+
+    auth_error = reject_if_admin_key_invalid(admin_key)
+    if auth_error is not None:
+        return auth_error
     
     sessions = rate_limiter.get_all_active_sessions()
     
