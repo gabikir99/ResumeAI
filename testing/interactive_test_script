@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""
+Interactive testing script for the Career Bot
+Allows you to test specific scenarios with predefined test cases
+"""
+
+import os
+import sys
+from dotenv import load_dotenv
+from openai import OpenAI
+
+# Add the current directory to path so we can import our modules
+sys.path.append('.')
+
+from gpt_service import GPTService
+from response_handlers import ResponseHandlers
+from user_intent import IntentClassifier
+from memory_manager import MemoryManager
+
+class InteractiveTester:
+    def __init__(self):
+        """Initialize the interactive tester."""
+        load_dotenv()
+        api_key = os.getenv("OPENAI_API_KEY")
+        
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not found in environment variables.")
+        
+        # Initialize services
+        client = OpenAI(api_key=api_key)
+        self.gpt_service = GPTService(client)
+        self.response_handlers = ResponseHandlers()
+        self.intent_classifier = IntentClassifier(client)
+        self.memory_manager = MemoryManager(k=15)
+        
+        # Test scenarios
+        self.test_scenarios = {
+            "1": {
+                "name": "Basic Name Storage",
+                "inputs": ["hello my name is Gavriel Kirichenko"],
+                "description": "Test if bot stores and uses name correctly"
+            },
+            "2": {
+                "name": "Career Interest Storage",
+                "inputs": ["i want to create a resume for data science positions"],
+                "description": "Test career interest detection and storage"
+            },
+            "3": {
+                "name": "Experience Storage",
+                "inputs": ["i have 3 years of experience in machine learning"],
+                "description": "Test experience information storage"
+            },
+            "4": {
+                "name": "Memory Recall Test",
+                "inputs": [
+                    "hello my name is Gavriel Kirichenko",
+                    "i want to work in data science",
+                    "what is my name?",
+                    "what job am i looking for?"
+                ],
+                "description": "Full memory storage and recall test"
+            },
+            "5": {
+                "name": "Personalized Resume Help",
+                "inputs": [
+                    "hello my name is Gavriel Kirichenko",
+                    "i have 3 years of experience in machine learning",
+                    "i work as a software engineer",
+                    "i want to create a resume for data science positions",
+                    "can you write me an objective section?"
+                ],
+                "description": "Test personalized resume assistance"
+            },
+            "6": {
+                "name": "Off-topic Handling",
+                "inputs": [
+                    "hello my name is John",
+                    "what's the weather like?",
+                    "tell me about cats"
+                ],
+                "description": "Test handling of off-topic questions"
+            },
+            "7": {
+                "name": "Repetitive Response Check",
+                "inputs": [
+                    "hello my name is Gavriel Kirichenko",
+                    "i have 3 years of experience in machine learning",
+                    "i work as a software engineer",
+                    "i want to create a resume for data science"
+                ],
+                "description": "Check for repetitive 'I'm here to assist you' responses"
+            }
+        }
+    
+    def simulate_input(self, user_input):
+        """Simulate a single user input."""
+        print(f"\n> {user_input}")
+        
+        try:
+            # Classify intent
+            intent_info = self.intent_classifier.classify_intent(user_input, self.memory_manager.get_user_info())
+            
+            # Handle intent
+            response = self._handle_intent(intent_info, user_input)
+            
+            # Add to memory
+            if response:
+                self.memory_manager.add_message(user_input, response)
+            
+            print(f"Bot: {response}")
+            
+            return response
+            
+        except Exception as e:
+            print(f"ERROR: {e}")
+            return None
+    
+    def _handle_intent(self, intent_info, original_input):
+        """Handle the classified intent and return response."""
+        intent = intent_info['intent']
+        args = intent_info.get('args', {})
+        
+        if intent == 'handle_greeting':
+            return self.response_handlers.handle_greeting(args['greeting'], self.memory_manager.get_user_info())
+            
+        elif intent == 'handle_goodbye':
+            return self.response_handlers.handle_goodbye(args['farewell'], self.memory_manager.get_user_info())
+            
+        elif intent == 'process_job_url':
+            return "URL processing would happen here (skipped in test)"
+            
+        elif intent == 'process_job_description':
+            return "Job description processing would happen here (skipped in test)"
+            
+        elif intent == 'answer_career_question':
+            return self.gpt_service.chat_about_resumes(
+                args['question'], 
+                self.memory_manager.get_user_info(), 
+                self.memory_manager.get_chat_history()
+            )
+            
+        elif intent == 'store_personal_info':
+            info_type = args['info_type']
+            info_value = args['info_value']
+            self.memory_manager.store_user_info(info_type, info_value)
+            
+            # Create specific confirmation messages
+            if info_type == 'experience':
+                return f"Got it! I've noted that you have {info_value}. This will be helpful for tailoring your data science resume."
+            elif info_type == 'current_role':
+                return f"Perfect! I've noted that you work as {info_value}. Your background will be valuable for data science roles."
+            elif info_type == 'name':
+                return f"Nice to meet you, {info_value}! How can I help with your career today?"
+            elif info_type == 'career_interest':
+                return f"Excellent! I've noted your interest in {info_value}. I'm here to help you with your job search in this field."
+            else:
+                return f"Thanks for sharing that information! I've noted your {info_type}: {info_value}."
+                
+        elif intent == 'handle_off_topic':
+            return "I'm specialized in helping with resumes, job applications, and career advice. How can I assist you with your career today?"
+            
+        else:
+            return "I'm not sure I understood that. Could you please rephrase your question about careers or resumes?"
+    
+    def show_memory(self):
+        """Display current memory state."""
+        print(f"\n📋 CURRENT MEMORY:")
+        user_info = self.memory_manager.get_user_info()
+        if user_info:
+            for key, value in user_info.items():
+                print(f"   {key}: {value}")
+        else:
+            print("   No information stored yet")
+        
+        chat_history = self.memory_manager.get_chat_history()
+        if chat_history:
+            print(f"\n💬 CHAT HISTORY LENGTH: {len(chat_history.split())} words")
+        else:
+            print(f"\n💬 CHAT HISTORY: Empty")
+    
+    def run_scenario(self, scenario_id):
+        """Run a specific test scenario."""
+        if scenario_id not in self.test_scenarios:
+            print(f"❌ Invalid scenario ID: {scenario_id}")
+            return
+        
+        scenario = self.test_scenarios[scenario_id]
+        print(f"\n🧪 TESTING SCENARIO: {scenario['name']}")
+        print(f"Description: {scenario['description']}")
+        print("="*60)
+        
+        for user_input in scenario['inputs']:
+            self.simulate_input(user_input)
+        
+        self.show_memory()
+    
+    def interactive_mode(self):
+        """Run in interactive mode."""
+        print("🤖 Interactive Bot Testing Mode")
+        print("Type your messages or use commands:")
+        print("Commands:")
+        print("  /memory - Show current memory")
+        print("  /reset - Reset memory")
+        print("  /quit - Exit")
+        print("="*60)
+        
+        while True:
+            try:
+                user_input = input("\n> ").strip()
+                
+                if user_input == '/quit':
+                    break
+                elif user_input == '/memory':
+                    self.show_memory()
+                elif user_input == '/reset':
+                    self.memory_manager = MemoryManager(k=15)
+                    print("🔄 Memory reset!")
+                elif user_input:
+                    self.simulate_input(user_input)
+                    
+            except KeyboardInterrupt:
+                break
+        
+        print("\nGoodbye! 👋")
+    
+    def show_menu(self):
+        """Show the main menu."""
+        print("\n🤖 Career Bot Testing Tool")
+        print("="*40)
+        print("Choose a testing option:")
+        print()
+        
+        for scenario_id, scenario in self.test_scenarios.items():
+            print(f"{scenario_id}. {scenario['name']}")
+            print(f"   {scenario['description']}")
+            print()
+        
+        print("i. Interactive Mode (type freely)")
+        print("q. Quit")
+        print()
+    
+    def run(self):
+        """Main run method."""
+        while True:
+            self.show_menu()
+            choice = input("Enter your choice: ").strip().lower()
+            
+            if choice == 'q':
+                break
+            elif choice == 'i':
+                self.interactive_mode()
+            elif choice in self.test_scenarios:
+                self.run_scenario(choice)
+                input("\nPress Enter to continue...")
+            else:
+                print("❌ Invalid choice. Please try again.")
+        
+        print("Goodbye! 👋")
+
+def main():
+    """Main function."""
+    try:
+        tester = InteractiveTester()
+        tester.run()
+    except Exception as e:
+        print(f"Failed to initialize tester: {e}")
+        return 1
+    
+    return 0
+
+if __name__ == "__main__":
+    exit(main())
